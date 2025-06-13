@@ -1,0 +1,24 @@
+{
+    "id": "FDA0E042",
+    "path": "~/5_wolbachia/1_control_optimization/cvEpicurveSelect/src/eval_candidates_rcpp.cpp",
+    "project_path": "src/eval_candidates_rcpp.cpp",
+    "type": "cpp",
+    "hash": "0",
+    "contents": "",
+    "dirty": false,
+    "created": 1749837394748.0,
+    "source_on_save": false,
+    "relative_order": 6,
+    "properties": {
+        "source_window_id": "",
+        "Source": "Source"
+    },
+    "folds": "",
+    "lastKnownWriteTime": 1749758113,
+    "encoding": "UTF-8",
+    "collab_server": "",
+    "source_window": "",
+    "last_content_update": 1749758113,
+    "read_only": false,
+    "read_only_alternatives": []
+}

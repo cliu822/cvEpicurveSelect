@@ -1,0 +1,8 @@
+
+roxygen2::roxygenise()
+
+devtools::load_all(".")       # Loads the package for development
+devtools::document()          # Just to be safe, regenerates docs
+devtools::install()           # Builds and installs the package
+
+library(cvEpicurveSelect)

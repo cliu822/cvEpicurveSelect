@@ -1,0 +1,6 @@
+useDynLib(cvEpicurveSelect, .registration = TRUE)
+importFrom(Rcpp, sourceCpp)
+export(make_cv_schemes)
+export(greedy_select_controls)
+export(eval_candidates)
+export(eval_candidates_rcpp)

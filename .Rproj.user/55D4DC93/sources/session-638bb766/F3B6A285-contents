@@ -1,0 +1,13 @@
+Package: cvEpicurveSelect
+Type: Package
+Title: Selection of Comparable Locations Based on Epidemic Curves Using Cross-Validation
+Version: 0.1.0
+Author: Carol Liu
+Maintainer: Carol Liu <zlh4@cdc.gov>
+Description: A tool to select control or surveillance locations based on cross-validated performance in reproducing epidemic time series.
+License: MIT
+Encoding: UTF-8
+RoxygenNote: 7.3.2
+Depends: R (>= 3.5.0)
+Imports: Rcpp, stats
+LinkingTo: Rcpp, RcppArmadillo
