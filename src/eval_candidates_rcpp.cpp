@@ -4,19 +4,19 @@ using namespace Rcpp;
 // [[Rcpp::depends(RcppArmadillo)]]
 
 // [[Rcpp::export]]
-List eval_candidates_rcpp(const arma::vec& goal_vec,                  //Vector of goal municipalities
-                          const arma::mat& candidate_mat,             //Matrix of candidate municipality values (each municipality as columns over #rows for each time step)
+List eval_candidates_rcpp(const arma::vec& goal_vec,                  //Vector of cases in target area
+                          const arma::mat& candidate_mat,             //Matrix of candidate area values (each area as columns over #rows for each time step)
                           const CharacterVector& block_labels,           //Vector of CV block labels (ex. "A", "B", "C")
                           const CharacterVector& unique_blocks,         //Unique block label values
-                          const IntegerVector& previously_selected,   //Indices of already selected candidates
-                          const CharacterVector& candidate_names) {   //Names of candidate municipalities
+                          const IntegerVector& previously_selected,   //Indices of already selected candidates areas
+                          const CharacterVector& candidate_names) {   //Names of candidate areas
   
   int n = goal_vec.n_elem;                                            //Number of time steps
-  int n_candidates = candidate_mat.n_cols;                            //Number of candidate municipalities
+  int n_candidates = candidate_mat.n_cols;                            //Number of candidate areas
   
   arma::mat oos_matrix(n, n_candidates, arma::fill::value(NA_REAL));  //Initialize out-of-sample (OOS) prediction matrix with NAs with n rows and n_candidate columns
-  std::vector<double> R2_vec;                                         //Initialize vectors to store R2 values (candidates x number blocks)                             
-  std::vector<std::string> selected_vec;                              //Initialize vector to store names of selected municipalities  
+  std::vector<double> corr2_vec;                                         //Initialize vectors to store corr2 values (candidates x number blocks)                             
+  std::vector<std::string> selected_vec;                              //Initialize vector to store names of selected areas  
   
   //Loop over each block (excluding last one, which may be incomplete)
   for (int b = 0; b < unique_blocks.size() - 1; ++b) {                  
@@ -44,7 +44,7 @@ List eval_candidates_rcpp(const arma::vec& goal_vec,                  //Vector o
     arma::vec y_train = goal_vec.elem(train_u);
     arma::vec y_test = goal_vec.elem(test_u);
     
-    //Loop over all candidate municipalities
+    //Loop over all candidate areas
     for (int p = 0; p < n_candidates; ++p) {
       bool already_selected = false;                                //Initializes a flag to track whether current candidate (p) already selected
       for (int k = 0; k < previously_selected.size(); ++k) {        //Loops through vector of previously selected
@@ -80,23 +80,23 @@ List eval_candidates_rcpp(const arma::vec& goal_vec,                  //Vector o
       // Predict on test data
       arma::vec preds = X_test * coef;
       
-      //Compute R2
+      //Compute corr2
       //double ss_res = arma::accu(arma::square(y_test - preds));
       //double ss_tot = arma::accu(arma::square(y_test - arma::mean(y_test)));
-      //double R2 = (ss_tot == 0) ? 0.0 : 1.0 - ss_res / ss_tot;
+      //double corr2 = (ss_tot == 0) ? 0.0 : 1.0 - ss_res / ss_tot;
 
       //Compute cor^2
-      double R2;
+      double corr2;
       if (arma::accu(y_test) == 0) {
-        R2 = 0.0;
+        corr2 = 0.0;
       } else {
         double r = arma::as_scalar(arma::cor(y_test, preds));
-        R2 = std::isfinite(r) ? r * r : 0.0;  // extra safety
+        corr2 = std::isfinite(r) ? r * r : 0.0;  // extra safety
       }
       //double r = arma::as_scalar(arma::cor(y_test, preds));
-      //double R2 = r * r;
+      //double corr2 = r * r;
       
-      R2_vec.push_back(R2);
+      corr2_vec.push_back(corr2);
       selected_vec.push_back(as<std::string>(candidate_names[p]));
       
       // Fill OOS matrix
@@ -107,7 +107,7 @@ List eval_candidates_rcpp(const arma::vec& goal_vec,                  //Vector o
   }
   
   return List::create(
-    Named("R2") = R2_vec,
+    Named("corr2") = corr2_vec,
     Named("selected") = selected_vec,
     Named("oos_est") = oos_matrix
   );

@@ -1,13 +1,20 @@
 #' Evaluate candidate municipalities using Rcpp
-#'
-#' @param goal_vec Vector of weekly cases in the goal municipality
-#' @param candidate_mat Matrix of candidate cases (time × municipality)
-#' @param block_labels Character vector of block labels (e.g., "A", "B", "C")
-#' @param unique_blocks Unique labels for each block
-#' @param previously_selected Integer vector of selected candidate indices
+#' @name eval_candidates_rcpp
+#' @title Evaluate candidates via out-of-sample corr² from multilinear regression (Rcpp) version
+#' @description This Rcpp function evaluates each candidate area by fitting a linear regression model to predict case counts in a target area using cross-validation. For each cross-validation scheme, it calculates the out-of-sample corr² for each candidate (in combination with any previously selected candidates) and stores the predicted values across all time points.
+#' 
+
+
+#' 
+
+#' @param goal_vec Vector of time-stratified (e.g., weekly) cases in the target area
+#' @param candidate_mat Matrix of candidate cases (time units × candidate areas)
+#' @param block_labels Character vector of block labelings for a single cross-validation scheme
+#' @param unique_blocks Character vector of unique block labels
+#' @param previously_selected Integer vector of indices of previously selected areas
 #' @param candidate_names Character vector of candidate names
 #'
-#' @return A list with R2 values, selected candidates, and out-of-sample predictions
+#' @return A list with corr2 values, selected candidates, and out-of-sample predictions
 #' @name eval_candidates_rcpp
 #' @export
 #' @useDynLib cvEpicurveSelect, .registration = TRUE

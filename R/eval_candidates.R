@@ -1,7 +1,13 @@
 #' Evaluate candidate municipalities using a single cross-validation scheme
+#' @name eval_candidates
+#' @title Evaluate candidates via out-of-sample corr² from multilinear regression
+#' @description This function evaluates each candidate area by fitting a linear regression model to predict case counts in a target area using cross-validation. For each cross-validation scheme, it calculates the out-of-sample corr² for each candidate (in combination with any previously selected candidates) and stores the predicted values across all time points.
+#' 
+
+
 #'
 #' For each candidate municipality, this function fits a linear model to predict the goal municipality
-#' using cross-validation defined by a single CV block labeling. Returns the out-of-sample R² and predictions.
+#' using cross-validation defined by a single CV block labeling. Returns the out-of-sample corr² and predictions.
 #'
 #' @param goal_vec Vector of case counts for the goal municipality (length = number of time points)
 #' @param candidate_mat Matrix of case counts from all candidate municipalities (n_time_points x n_candidates)
@@ -9,8 +15,8 @@
 #' @param previously_selected Indices of previously selected municipalities (columns in candidate_mat) to include
 #'
 #' @return A list with:
-#'   - R2: Vector of R² values for each (block × candidate)
-#'   - selected: Vector of candidate names corresponding to each R²
+#'   - corr²: Vector of corr² values for each (block × candidate)
+#'   - selected: Vector of candidate names corresponding to each corr²
 #'   - oos_est: Matrix of out-of-sample predictions (same shape as candidate_mat)
 #'   
 #' @export
@@ -18,8 +24,8 @@ eval_candidates <- function(goal_vec, candidate_mat, block_labels, previously_se
   n_candidates <- ncol(candidate_mat)  # Total number of candidate municipalities
   candidate_names <- colnames(candidate_mat)  # Names of candidate municipalities
   
-  R2_vec <- c()             # To store R² values for each candidate × number of block
-  selected_vec <- c()       # To store candidate names corresponding to each R²
+  corr2_vec <- c()             # To store R² values for each candidate × number of block
+  selected_vec <- c()       # To store candidate names corresponding to each corr²
   oos_matrix <- matrix(NA, nrow = length(goal_vec), ncol = n_candidates)  # Placeholder for OOS predictions
   colnames(oos_matrix) <- candidate_names
   
@@ -65,21 +71,21 @@ eval_candidates <- function(goal_vec, candidate_mat, block_labels, previously_se
         
         # Compute out-of-sample R²
         if (sum(goal_test, na.rm = TRUE) == 0) {
-          R2 <- 0  # Avoid division by zero or undefined correlation
+          corr2 <- 0  # Avoid division by zero or undefined correlation
         } else {
-          R2 <- cor(preds, goal_test, use = "complete.obs")^2
+          corr2 <- cor(preds, goal_test, use = "complete.obs")^2
         }
         
         # Record R² and candidate name
-        R2_vec <- c(R2_vec, R2)
+        corr2_vec <- c(corr2_vec, corr2)
         selected_vec <- c(selected_vec, candidate_names[p])
       }
     }
   }
   
   return(list(
-    R2 = R2_vec,                    # Vector of length (#blocks × #candidates)
-    selected = selected_vec,        # Candidate name associated with each R²
+    corr2 = corr2_vec,              # Vector of length (#blocks × #candidates)
+    selected = selected_vec,        # Candidate name associated with each corr²
     oos_est = oos_matrix            # Matrix of predictions: time × candidate
   ))
 }
