@@ -2,7 +2,9 @@
 
 export(eval_candidates)
 export(eval_candidates_rcpp)
-export(greedy_select_controls)
+export(greedy_select_candidate)
 export(make_cv_schemes)
+export(order_select)
+export(pred_targ)
 importFrom(Rcpp,sourceCpp)
 useDynLib(cvEpicurveSelect, .registration = TRUE)

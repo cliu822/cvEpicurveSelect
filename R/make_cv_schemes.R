@@ -2,13 +2,13 @@
 #'
 #' @name make_cv_schemes
 #' @title Generate Cross-Validation Schemes
-#' @description
-#' This function generates multiple randomized cross-validation labeling schemes for a time series of outcomes, where each scheme divides the timeline into repeating blocks (e.g., "A", "B", "C") used for testing and training in assessing candidates. 
+#' @description This function generates multiple randomized cross-validation labeling schemes for a time series of outcomes, where each scheme divides the timeline into repeating blocks (e.g., "A", "B", "C") used for testing and training in assessing candidates. 
 #' 
 #' @param tot_ts Total number of time points (e.g., total weeks of data)
 #' @param n_cv_schemes Number of replicate cross-validation block labelings schemes to generate
 #' @param block_length Number of years per block (default: 3). Each block is used as a test set once.
 #' @param freq Number of time points per year (e.g., 52 for weekly data)
+#'
 #'
 #' @return A list of length \code{n_cv_schemes}. Each element is a character vector of length \code{tot_ts},
 #' assigning each time point to a block label (e.g., "A", "B", "C").

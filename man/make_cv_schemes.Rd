@@ -2,23 +2,26 @@
 % Please edit documentation in R/make_cv_schemes.R
 \name{make_cv_schemes}
 \alias{make_cv_schemes}
-\title{Generate multiple cross-validation block labelings over a time series}
+\title{Generate Cross-Validation Schemes}
 \usage{
 make_cv_schemes(tot_ts, n_cv_schemes, block_length = 3, freq = 52)
 }
 \arguments{
 \item{tot_ts}{Total number of time points (e.g., total weeks of data)}
 
-\item{n_cv_schemes}{Number of replicate CV block labelings schemes to generate}
+\item{n_cv_schemes}{Number of replicate cross-validation block labelings schemes to generate}
 
 \item{block_length}{Number of years per block (default: 3). Each block is used as a test set once.}
 
 \item{freq}{Number of time points per year (e.g., 52 for weekly data)}
 }
 \value{
-A list of length n_cv_schemes. Each element is a character vector of length tot_ts,
-        assigning each time point to a block label (e.g., "A", "B", "C").
+A list of length \code{n_cv_schemes}. Each element is a character vector of length \code{tot_ts},
+assigning each time point to a block label (e.g., "A", "B", "C").
 }
 \description{
+This function generates multiple randomized cross-validation labeling schemes for a time series of outcomes, where each scheme divides the timeline into repeating blocks (e.g., "A", "B", "C") used for testing and training in assessing candidates.
+}
+\details{
 Generate multiple cross-validation block labelings over a time series
 }

@@ -2,23 +2,31 @@
 % Please edit documentation in R/eval_candidates_rcpp.R
 \name{eval_candidates_rcpp}
 \alias{eval_candidates_rcpp}
-\title{Evaluate candidate municipalities using Rcpp}
+\title{Evaluate candidates via out-of-sample corr² from multilinear regression (Rcpp version)}
 \arguments{
-\item{goal_vec}{Vector of weekly cases in the goal municipality}
+\item{goal_vec}{Vector of time-stratified (e.g., weekly) cases in the target area}
 
-\item{candidate_mat}{Matrix of candidate cases (time × municipality)}
+\item{candidate_mat}{Matrix of candidate cases (time units × candidate areas)}
 
-\item{block_labels}{Character vector of block labels (e.g., "A", "B", "C")}
+\item{block_labels}{Character vector of block labelings for a single cross-validation scheme}
 
-\item{unique_blocks}{Unique labels for each block}
+\item{unique_blocks}{Character vector of unique block labels}
 
-\item{previously_selected}{Integer vector of selected candidate indices}
+\item{previously_selected}{Integer vector of indices of previously selected areas}
 
 \item{candidate_names}{Character vector of candidate names}
 }
 \value{
-A list with R2 values, selected candidates, and out-of-sample predictions
+A list with:
+\itemize{
+  \item \code{corr²}: Vector of corr² values for each (block × candidate)
+  \item \code{selected}: Vector of candidate names corresponding to each corr²
+  \item \code{oos_est}: Matrix of out-of-sample predictions (same shape as \code{candidate_mat})
+}
 }
 \description{
+This Rcpp function evaluates each candidate area by fitting a linear regression model to predict case counts in a target area using cross-validation. For each cross-validation scheme, it calculates the out-of-sample corr² for each candidate (in combination with any previously selected candidates) and stores the predicted values across all time points.
+}
+\details{
 Evaluate candidate municipalities using Rcpp
 }

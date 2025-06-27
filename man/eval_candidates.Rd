@@ -2,7 +2,7 @@
 % Please edit documentation in R/eval_candidates.R
 \name{eval_candidates}
 \alias{eval_candidates}
-\title{Evaluate candidate municipalities using a single cross-validation scheme}
+\title{Evaluate candidates via out-of-sample corr² from multilinear regression}
 \usage{
 eval_candidates(
   goal_vec,
@@ -12,21 +12,25 @@ eval_candidates(
 )
 }
 \arguments{
-\item{goal_vec}{Vector of case counts for the goal municipality (length = number of time points)}
+\item{goal_vec}{Vector of time-stratified (e.g., weekly) cases in the target area}
 
-\item{candidate_mat}{Matrix of case counts from all candidate municipalities (n_time_points x n_candidates)}
+\item{candidate_mat}{Matrix of candidate cases (time units × candidate areas)}
 
-\item{block_labels}{A character vector of block labels (e.g., "A", "B", "C"), same length as goal_vec}
+\item{block_labels}{Character vector of block labelings for a single cross-validation scheme}
 
-\item{previously_selected}{Indices of previously selected municipalities (columns in candidate_mat) to include}
+\item{previously_selected}{Integer vector of indices of previously selected areas}
 }
 \value{
 A list with:
-  - R2: Vector of R² values for each (block × candidate)
-  - selected: Vector of candidate names corresponding to each R²
-  - oos_est: Matrix of out-of-sample predictions (same shape as candidate_mat)
+\itemize{
+  \item \code{corr²}: Vector of corr² values for each (block × candidate)
+  \item \code{selected}: Vector of candidate names corresponding to each corr²
+  \item \code{oos_est}: Matrix of out-of-sample predictions (same shape as \code{candidate_mat})
+}
 }
 \description{
-For each candidate municipality, this function fits a linear model to predict the goal municipality
-using cross-validation defined by a single CV block labeling. Returns the out-of-sample R² and predictions.
+This function evaluates each candidate area by fitting a linear regression model to predict case counts in a target area using cross-validation. For each cross-validation scheme, it calculates the out-of-sample corr² for each candidate (in combination with any previously selected candidates) and stores the predicted values across all time points.
+}
+\details{
+Evaluate candidate municipalities using a single cross-validation scheme
 }

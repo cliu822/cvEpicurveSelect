@@ -8,6 +8,8 @@
 ~%2F5_wolbachia%2F1_control_optimization%2FcvEpicurveSelect%2FR%2Fgreedy_select_candidate.R="D9275CD4"
 ~%2F5_wolbachia%2F1_control_optimization%2FcvEpicurveSelect%2FR%2Fgreedy_select_controls.R="EA4227B8"
 ~%2F5_wolbachia%2F1_control_optimization%2FcvEpicurveSelect%2FR%2Fmake_cv_schemes.R="FF1F47D6"
+~%2F5_wolbachia%2F1_control_optimization%2FcvEpicurveSelect%2FR%2Forder_select.R="6D28DF45"
+~%2F5_wolbachia%2F1_control_optimization%2FcvEpicurveSelect%2FR%2Fpred_targ.R="003704C2"
 ~%2F5_wolbachia%2F1_control_optimization%2FcvEpicurveSelect%2Fman%2Feval_candidates.Rd="C220B444"
 ~%2F5_wolbachia%2F1_control_optimization%2FcvEpicurveSelect%2Fsrc%2FRcppExports.cpp="A7DAC1E5"
 ~%2F5_wolbachia%2F1_control_optimization%2FcvEpicurveSelect%2Fsrc%2Feval_candidates_one_cvscheme.cpp="056DA204"

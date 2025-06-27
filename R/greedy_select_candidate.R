@@ -9,10 +9,15 @@
 #' @param n_select Number of candidates to select
 #' @param rcpp Whether to use Rcpp compiler function or R function to evaluate candidates
 #' 
-#' @return List of names of selected candidates and corr² values
+#' @return A list with:
+#' \itemize{
+#'   \item \code{selected_areas}: Vector of \code{n_select} selected areas
+#'   \item \code{corr2_per_step}: Vector of performance with each additional selection
+#' }
+
 #' 
 #' @export
-greedy_select_controls <- function(goal_vec, candidate_mat, cv_schemes, n_select = 10, rcpp=TRUE) {
+greedy_select_candidate <- function(goal_vec, candidate_mat, cv_schemes, n_select = 10, rcpp=TRUE) {
   
   
   selected_names <- c()
@@ -65,7 +70,7 @@ greedy_select_controls <- function(goal_vec, candidate_mat, cv_schemes, n_select
   }
   
   return(list(
-    selected_controls = selected_names,
+    selected_areas = selected_names,
     corr2_per_step = corr2_per_step
   ))
 }

@@ -3,21 +3,19 @@
 #' @title Evaluate candidates via out-of-sample corr² from multilinear regression
 #' @description This function evaluates each candidate area by fitting a linear regression model to predict case counts in a target area using cross-validation. For each cross-validation scheme, it calculates the out-of-sample corr² for each candidate (in combination with any previously selected candidates) and stores the predicted values across all time points.
 #' 
-
-
 #'
-#' For each candidate municipality, this function fits a linear model to predict the goal municipality
-#' using cross-validation defined by a single CV block labeling. Returns the out-of-sample corr² and predictions.
-#'
-#' @param goal_vec Vector of case counts for the goal municipality (length = number of time points)
-#' @param candidate_mat Matrix of case counts from all candidate municipalities (n_time_points x n_candidates)
-#' @param block_labels A character vector of block labels (e.g., "A", "B", "C"), same length as goal_vec
-#' @param previously_selected Indices of previously selected municipalities (columns in candidate_mat) to include
+#' @param goal_vec Vector of time-stratified (e.g., weekly) cases in the target area
+#' @param candidate_mat Matrix of candidate cases (time units × candidate areas)
+#' @param block_labels Character vector of block labelings for a single cross-validation scheme
+#' @param previously_selected Integer vector of indices of previously selected areas
 #'
 #' @return A list with:
-#'   - corr²: Vector of corr² values for each (block × candidate)
-#'   - selected: Vector of candidate names corresponding to each corr²
-#'   - oos_est: Matrix of out-of-sample predictions (same shape as candidate_mat)
+#' \itemize{
+#'   \item \code{corr²}: Vector of corr² values for each (block × candidate)
+#'   \item \code{selected}: Vector of candidate names corresponding to each corr²
+#'   \item \code{oos_est}: Matrix of out-of-sample predictions (same shape as \code{candidate_mat})
+#' }
+
 #'   
 #' @export
 eval_candidates <- function(goal_vec, candidate_mat, block_labels, previously_selected = numeric(0)) {
