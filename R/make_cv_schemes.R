@@ -14,6 +14,41 @@
 #' assigning each time point to a block label (e.g., "A", "B", "C").
 #'         
 #' @export         
+# make_cv_schemes <- function(tot_ts, n_cv_schemes, block_length = 3, freq = 52) {
+#   
+#   # Compute the number of full years represented in the time series
+#   years <- floor(tot_ts / freq)
+#   
+#   # Create a repeating sequence of block labels (e.g., "A", "B", "C"),
+#   # where each label spans `block_length` years (converted to weeks)
+#   base_labels <- rep(LETTERS[1:(years / block_length)], each = freq * block_length)
+#   
+#   # Initialize the list to hold n_cv_schemes different labelings
+#   cv_schemes <- vector("list", n_cv_schemes)
+#   
+#   for (i in 1:n_cv_schemes) {
+#     # Start by filling the full time series with a placeholder label (unused)
+#     block_labels <- rep(LETTERS[(years / block_length) + 1], tot_ts)
+#     
+#     # Randomly select a starting point for inserting the base_labels
+#     start <- sample(1:freq, 1)
+#     
+#     if (start == 1) {
+#       # If start is 1, assign base_labels directly
+#       block_labels <- base_labels
+#     } else {
+#       # If not, insert base_labels starting at `start`, trimming to fit
+#       rm_end <- abs(length(start:tot_ts) - length(base_labels)) - 1
+#       block_labels[start:tot_ts] <- base_labels[-((length(base_labels) - rm_end):length(base_labels))]
+#     }
+#     
+#     # Store block labels in the list of cv schemes
+#     cv_schemes[[i]] <- block_labels
+#   }
+#   
+#   return(cv_schemes)
+# }
+
 make_cv_schemes <- function(tot_ts, n_cv_schemes, block_length = 3, freq = 52) {
   
   # Compute the number of full years represented in the time series
@@ -34,17 +69,21 @@ make_cv_schemes <- function(tot_ts, n_cv_schemes, block_length = 3, freq = 52) {
     start <- sample(1:freq, 1)
     
     if (start == 1) {
-      # If start is 1, assign base_labels directly
-      block_labels <- base_labels
+      # If start is 1, assign base_labels directly (trim to tot_ts if needed)
+      block_labels <- base_labels[1:tot_ts]
     } else {
-      # If not, insert base_labels starting at `start`, trimming to fit
-      rm_end <- abs(length(start:tot_ts) - length(base_labels)) - 1
-      block_labels[start:tot_ts] <- base_labels[-((length(base_labels) - rm_end):length(base_labels))]
+      # Otherwise, insert base_labels starting at `start` without exceeding bounds
+      usable_len <- min(length(base_labels), tot_ts - start + 1)
+      block_labels[start:(start + usable_len - 1)] <- base_labels[1:usable_len]
     }
     
-    # Store block labels in the list of cv schemes
+    # Store block labels in the list of CV schemes
     cv_schemes[[i]] <- block_labels
   }
   
+  # Final check to ensure consistency
+  stopifnot(all(vapply(cv_schemes, length, integer(1)) == tot_ts))
+  
   return(cv_schemes)
 }
+
