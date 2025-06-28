@@ -67,6 +67,9 @@ List eval_candidates_rcpp(const arma::vec& goal_vec,                  //Vector o
         
       }
       
+      // Skip candidate if design matrix is rank-deficient
+      if (arma::rank(X_train) < X_train.n_cols) continue;
+      
       // Fit linear regression: solve for coefficients
       arma::vec coef;
       bool success = arma::solve(coef, X_train, y_train);
