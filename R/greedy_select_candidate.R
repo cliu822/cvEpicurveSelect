@@ -19,6 +19,25 @@
 #' @export
 greedy_select_candidate <- function(goal_vec, candidate_mat, cv_schemes, n_select = 10, rcpp=TRUE) {
   
+  if (length(goal_vec) != nrow(candidate_mat)) {
+    stop("Length of 'goal_vec' does not match the number of rows in 'candidate_mat'. Number of time series observations between goal and candidate should be the same.")
+  }
+  
+  if (nrow(candidate_mat) == 0 || ncol(candidate_mat) == 0) {
+    stop("Candidate matrix is empty. It must have at least one row and one column.")
+  }
+  
+  if (all(is.na(candidate_mat) | candidate_mat == 0)) {
+    stop("Candidate matrix contains only 0s or NAs. At least one non-zero, non-NA value is required.")
+  }
+  
+  if (any(sapply(cv_schemes, function(scheme) length(unique(scheme)) <= 1))) {
+    stop("At least one cross-validation scheme contains fewer than two unique blocks. Not enough data. ")
+  }
+  
+  if (any(sapply(cv_schemes, function(scheme) length(unique(scheme)) < 3))) {
+    warning("At least one cross-validation scheme contains fewer than three unique blocks. Consider shortening block length or adding more time steps.")
+  }
   
   selected_names <- c()
   corr2_per_step <- c()
