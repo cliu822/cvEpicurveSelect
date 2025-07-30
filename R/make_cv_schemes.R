@@ -51,14 +51,21 @@
 
 make_cv_schemes <- function(tot_ts, n_cv_schemes, block_length = 3, freq = 52) {
   
+  if (tot_ts < freq) {
+    stop("Total time steps must be more than time steps per year to generate more than one block label")
+  }
+  
+  
   if (block_length < 1) {
     warning("Block_length is less than one year, some CV schemes may contain NAs")
   }
   
+  # Compute the number of full years represented in the time series
   years <- floor(tot_ts / freq)
   n_blocks <- ceiling(years / block_length)
   
-  # Generate enough labels to cover all blocks, e.g., A, B, ..., Z, AA, AB, ..., ZZ
+  # Create a repeating sequence of block labels (e.g., "A", "B", "C"),
+  # where each label spans `block_length` years (converted to weeks)
   generate_labels <- function(n) {
     if (n <= 26) return(LETTERS[1:n])
     
@@ -71,6 +78,7 @@ make_cv_schemes <- function(tot_ts, n_cv_schemes, block_length = 3, freq = 52) {
   label_set <- generate_labels(n_blocks)
   base_labels <- rep(label_set, each = freq * block_length)[1:(freq * block_length * n_blocks)]
   
+  # Initialize the list to hold n_cv_schemes different labelings
   cv_schemes <- vector("list", n_cv_schemes)
   
   for (i in seq_len(n_cv_schemes)) {
