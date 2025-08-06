@@ -1,0 +1,290 @@
+---
+title: "cvEpicurveSelect"
+author: "Carol Y. Liu, Maile B. Thayer, Zachary J. Madewell (+others, author order TBD)"
+date: "`r Sys.Date()`"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{my-vignette}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+bibliography: References.bib
+---
+
+```{r, include = FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>"
+)
+
+library(cvEpicurveSelect)
+
+if (requireNamespace("tidyverse", quietly = TRUE)) {
+  library(tidyverse)
+} else {
+  message("tidyverse not installed; install it to run examples.")
+}
+
+cat('<h4 style="font-size:0.9em;"><b>Figure 1</b></h4>')
+cat('<h4 style="font-size:0.9em;"><b>Figure 2</b></h4>')
+cat('<h4 style="font-size:0.9em;"><b>Figure 3</b></h4>')
+cat('<h4 style="font-size:0.9em;"><b>Figure 3</b></h4>')
+cat('<h4 style="font-size:0.9em;"><b>Arguments</b></h4>')
+cat('<h4 style="font-size:0.9em;"><b>Returns</b></h4>')
+cat('<h4 style="font-size:0.9em;"><b>Usage</b></h4>')
+
+
+
+
+#cat('<h5 style="font-size:0.8em; font-weight: normal;">Simplified version to demo</h5>')
+cat('<h5 style="font-size:0.8em;"><b>Create cv_scheme using the Peru dengue data</b></h5>')
+cat('<p style="font-size:0.8em; margin-top:1em;">Simplified version to demo</p>')
+
+
+```
+
+
+## Introduction
+The purpose of this package is to efficiently identify a set of locations whose weighted linear combination best captures epidemic dynamics for a target location.
+
+Potential use-cases include the following:
+
+* Identify control sites as counterfactuals for evaluating the impact of area-level interventions (e.g. select a group of counties that can best serve as a control for a county implementing a vector-control strategy to estimate the effect)
+* Select surveillance sites representative of epidemic patterns of target surveillance area (ex. select a set of hospitals or clinics as sentinnel surveillance sites that best represent a state's epidemic patterns)
+
+The package optimizes a method developed by @Scarpino2017 which utilizes a stepwise cross-validation algorithm based on multivariate linear regression models and out-of-sample predictive performance. 
+
+## Data Input
+To use the selection functions in this package, the following are the necessary input data:
+
+* **Target time series**:  A numeric vector of length *t*, representing case counts for the target location at uniform time intervals (e.g. weekly)
+* **Candidate matrix**: A numeric matrix with *t* rows and *c* columns, where each column corresponds to the time series of cases for a candidate location (excluding the target). The rows must be aligned in time with the target time series. 
+
+Examples from this package use data from OpenDengue (Source: @opendengue2025). We use weekly data on dengue cases from Peru reported between 2000 to 2023. The data is stratified by administrative level 2 or the province.  We load the data below.
+
+```{r}
+data("peru_dengue")
+
+head(peru_dengue)
+```
+
+For this example, we will use Lima province as the target area and the remaining provinces in Peru as candidate areas. Therefore, the question we are trying to address is: which of the remaining 115 provinces, when weighted in linear combination, can best replicate the historical epidemic trajectory of dengue experienced by Lima province?
+
+### Create the target time series
+```{r}
+goal_name <- "LIMA"
+goal_vec <- peru_dengue[peru_dengue$adm_2_name==goal_name, "dengue_total"]
+```
+
+### Create the candidate matrix
+```{r}
+candidate_mat <- peru_dengue%>%
+                  mutate(adm_2_name = gsub("\\s+", "", adm_2_name))%>%
+                  filter(adm_2_name!=goal_name)%>%
+                 select(calendar_start_date, adm_2_name,dengue_total)%>%
+                  pivot_wider(names_from = "adm_2_name", values_from ="dengue_total")%>%
+                  select(-calendar_start_date)%>%
+                  as.matrix()
+```
+
+## Key functions
+This package contains three main functions:
+
+ 1) `make_cv_schemes()`: Creates cross-validation (CV) labeling schemes from time-series data that will be used in training and testing.
+ 2) `eval_candidates_rcpp()`:  Evaluates each candidate area by fitting a linear regression model to predict case counts in a target area using cross-validation. 
+ 3) `greedy_select_candidate()`: Evaluates each candidate area by fitting a linear regression model to predict case counts in a target area using cross-validation. Selects candidate areas using a greedy selection algorithm by comparing the out-of-sample corr² averaged across test blocks and cross-validation schemes.
+
+### **make_cv_schemes()**
+<img src="figures/1_make_cv_scheme.png" width="100%">
+
+
+#### *Figure 1* 
+Illustration of the generation of cross-validation (CV) labeling schemes from time series data using the function `make_cv_schemes()`. In the example, there are 5 candidate areas and 1 target area and we are generating 4 different CV schemes with three blocks for each. Each of the 4 CV schemes are shifted in time so that each block captures a different time period. 
+
+
+#### *Arguments*
+
+* `tot_ts`: Total number of time points (e.g., total weeks of data)
+* `n_cv_schemes`: Number of different CV block labeling schemes to generate.
+* `block_length`: Number of years per block (default: 3). Each block is used as a test set once.
+* `freq`: Number of time points per year (e.g., 52 for weekly data).
+
+#### *Returns*
+A list of CV labeling schemes. Each element corresponds to a different scheme, assigning a label (e.g., "A", "B", "C") to each time point. 
+
+
+#### *Usage*
+
+**Simplified version to demo**
+
+Here we specify 200 time steps and four CV schemes where each block is 1 year each. This results in three block labels of 1 year each with some time steps unused at the beginning and end of time series.
+```{r}
+cv_schemes_simp <- make_cv_schemes(tot_ts = 200, n_cv_schemes=4, block_length=1, freq=52)
+unique(cv_schemes_simp[[1]]) ##Three block labels of 1 year each
+```
+
+We can assess the the first two CV schemes and see that the block labels are shifted.
+```{r}
+cv_schemes_simp[[1]]
+```
+
+```{r}
+cv_schemes_simp[[2]]
+```
+
+**Create CV schemes using the Peru dengue data**
+```{r}
+cv_schemes <- make_cv_schemes(tot_ts = length(goal_vec), n_cv_schemes = 4, block_length = 4, freq = 52)
+unique(cv_schemes[[1]]) ##Six block labels of around 4 years each
+
+```
+
+
+### **eval_candidates_rcpp()**
+<img src="figures/2_eval_candidates.png" width="80%">
+
+
+#### *Figure 2* 
+Illustration of the process for evaluating a single candidate area implemented by the function `eval_candidates()`. We first choose one of the blocks as the test block and the remaining as training (2a). We then regress using the training blocks, predict using the test blocks and assess the performance using the corr² metric. We rotate the test blocks (three in example), repeating the process of regressing, predicting and accessing performance. We then repeat across all the CV schemes (four in example) and all candidate areas (five in example) (2b). The candidate with the best performance metric averaged across all blocks and CV schemes will be selected. 
+
+
+#### *Arguments*
+
+* `goal_vec`: A vector of time-stratified (e.g., weekly) cases in the target area.
+* `candidate_mat`: A matrix of cases in candidate areas (time units × candidate areas).
+* `block_labels`: A character vector of block labels for a single cross-validation scheme.
+* `unique_blocks`" A character vector of unique block labels from the generated CV schemes.
+* `previously_selected`: An integer vector of indices of previously selected areas.
+* `candidate_names`: A character vector of candidate names.
+
+#### *Returns*
+
+A list with:
+
+* `corr²`: A vector of corr² values for each (block × candidate).
+* `selected`: A vector of candidate names corresponding to each corr².
+* `oos_est`:A matrix of out-of-sample predictions (same shape as `candidate_mat`).
+
+#### *Usage*
+```{r}
+res_cand <- eval_candidates_rcpp(goal_vec = goal_vec,            #Target time series (vector)
+                    candidate_mat=candidate_mat,                 #Matrix of candidate predictors (time units x candidate areas)
+                    block_labels=cv_schemes[[1]],                #Vector of a single CV block labels
+                    unique_blocks = unique(cv_schemes[[1]]),     #Unique block labels
+                    previously_selected = integer(0),            #Vector of indices of previously selected candidates, 0 means none selcted
+                    candidate_names = colnames(candidate_mat))   #Vector of candidate names
+
+```
+
+The first six `corr²` correspond to the first six candidates with the first block as testing.
+```{r}
+res_cand[[1]][1:6]
+```
+
+The first six `selected` correspond to the first six candidates.
+```{r}
+res_cand[[2]][1:6]
+```
+
+
+
+### **greedy_select_candidate()**
+<img src="figures/3_greedy_select.png" width="100%">
+
+#### *Figure 3* 
+Illustration of the process of selecting `n_select` candidate areas, using the greedy selection algorithm. In each step, the algorithm selects the option that offers the best improrvement without reconsidering past decisions. The candidate that yields the greatest performance in combination with previously selected candidates is the one that is added to the set of selected candidates. The selected candidates are fixed and are not reconsidered or removed in subsequent steps.
+
+#### *Arguments*
+
+* `goal_vec`: A vector of time-stratified (e.g., weekly) cases in the target area.
+* `candidate_mat`: A matrix of candidate cases (time units × candidate areas).
+* `cv_schemes`: List of length `n_cv_schemes`, each element is a vector of block labels (e.g., "A", "B", "C") of `tot_ts`. This is the output of `make_cv_schemes()`.
+* `n_select`: Number of candidates to select.
+* `rcpp`: Boolean of whether to use Rcpp compiler function or R function to evaluate candidates.
+
+
+#### *Returns*
+
+A list with:
+
+* `selected_areas`: A vector of `n_select` selected areas.
+* `corr2_per_step`: A vector of performance corr² with each additional selection.
+
+#### *Usage*
+```{r}
+res_sel <- greedy_select_candidate(goal_vec=goal_vec, #Target time series (vector)
+                        candidate_mat=candidate_mat,  #Matrix of candidate predictors (time units x candidate areas)
+                        cv_schemes = cv_schemes,      #List of CV schemes
+                        n_select=5)                   #Number of candidates to select
+```
+
+
+The five selected areas are as follows with the incremental `corr²` values displayed below. 
+```{r}
+res_sel$corr2_per_step
+```
+
+
+* The candidate area that was selected first is `r names(res_sel$corr2_per_step)[1]` with an average `corr²` across all test blocks and all CV schemes of `r round(res_sel$corr2_per_step[[1]], 3)`
+* After `r names(res_sel$corr2_per_step)[1]`, the candidate area that was subsequently selected is `r names(res_sel$corr2_per_step)[2]` and when linearly combined with `r names(res_sel$corr2_per_step)[1]`, the average `corr²` is `r round(res_sel$corr2_per_step[[2]], 3)`.
+
+## Full example
+
+In practice, we will run many iterations of the algorithm and then select the best performing candidates. We again use the Peru dengue data in our example and the province of Lima as the target, with remaining provinces as the candidate areas.
+
+<img src="figures/4_full_workflow.png" width="80%">
+
+#### Run over many iterations
+```{r message=F}
+nit <- 5  ##Number of iterations
+n_sel<-5    ##Number of municipalities to select
+sel_mat <- matrix(NA,ncol=n_sel,nrow=nit)
+corr2_mat    <- matrix(NA,ncol=n_sel,nrow=nit)
+
+for(j in 1:n_sel){       
+  for(i in 1:nit){
+    cv_schemes_new<-make_cv_schemes(tot_ts=length(goal_vec),n_cv_schemes = 10,block_length=4)
+    nets <- greedy_select_candidate(goal_vec=goal_vec, candidate_mat=candidate_mat, cv_schemes = cv_schemes_new, n_select=j)
+    sel_mat[i,j]     <- nets[[1]][j]
+    corr2_mat[i,j]         <- nets[[2]][j]
+  }
+}
+
+```
+
+#### Summarize results
+```{r}
+sel_vec <- order_select(sel_mat)[1:n_sel,"Area"]   ##Choose the n_sel number of most commonly selected areas
+sel_cases <-as.data.frame(candidate_mat[,sel_vec]) ##Get the cases from those candidate areas
+
+print(sel_vec)
+```
+#### Use the selected candidates to predict the target
+```{r}
+res_pred <- pred_targ(goal_vec, sel_cases)   ##Use the selected candidates to predict the target
+```
+
+The overall `corr²` is **`r res_pred$corr2`**.
+
+#### Visualize the predicted vs target
+```{r fig.width=7, fig.height=4, echo=FALSE, message=FALSE, warning=FALSE}
+data.frame(Week = 1:length(goal_vec),
+           Actual = goal_vec,
+           Predicted = res_pred$pred)%>%
+  
+  pivot_longer(cols = c("Actual", "Predicted"), names_to = "Type", values_to = "Cases")%>%
+  #filter(Week<=688)%>%
+  mutate(Date = as.Date("2000-01-02") + weeks(Week - 1))%>%
+  
+  ggplot()+
+  scale_x_date(date_breaks = "1 year", date_labels = "%Y") +
+  geom_line(aes(x = Date, y = Cases, color = Type),size = 1) +
+  
+  labs(title = "Actual vs. Predicted (Lima)",
+       x = "Week",
+       y = "Cases") +
+  theme_minimal()+ guides(color = guide_legend(title = NULL))+
+  theme( legend.position = "bottom", legend.direction = "horizontal", legend.box = "horizontal",
+         axis.text.x = element_text(angle = 45, hjust = 1))
+```
+
+## References
