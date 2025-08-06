@@ -2,8 +2,8 @@ Package: cvEpicurveSelect
 Type: Package
 Title: Selecting Locations with Comparable Historical Epidemics using Cross-Validation 
 Version: 0.1.0
-Author: Carol Liu
-Maintainer: Carol Liu <zlh4@cdc.gov>
+Author: Carol Y. Liu, Maile B. Thayer, Zachary J. Madewell
+Maintainer: Carol Y. Liu <zlh4@cdc.gov>
 Description: A tool to select control or surveillance locations based on cross-validated performance in reproducing epidemic time series.
 License: MIT
 Encoding: UTF-8
