@@ -11,3 +11,10 @@ RoxygenNote: 7.3.2
 Depends: R (>= 3.5.0)
 Imports: Rcpp, stats
 LinkingTo: Rcpp, RcppArmadillo
+LazyData: true
+Suggests: 
+    knitr,
+    rmarkdown,
+    ggplot2,
+    tidyverse
+VignetteBuilder: knitr
