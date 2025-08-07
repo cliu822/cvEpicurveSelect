@@ -91,7 +91,7 @@ This package contains three main functions:
 
  1) `make_cv_schemes()`: Creates cross-validation (CV) labeling schemes from time-series data that will be used in training and testing.
  2) `eval_candidates_rcpp()`:  Evaluates each candidate area by fitting a linear regression model to predict case counts in a target area using cross-validation. 
- 3) `greedy_select_candidate()`: Evaluates each candidate area by fitting a linear regression model to predict case counts in a target area using cross-validation. Selects candidate areas using a greedy selection algorithm by comparing the out-of-sample corr² averaged across test blocks and cross-validation schemes.
+ 3) `greedy_select_candidate()`: Selects candidate areas using a greedy selection algorithm by comparing the out-of-sample corr² averaged across test blocks and cross-validation schemes.
 
 ### **make_cv_schemes()**
 <img src="figures/1_make_cv_scheme.png" width="100%">
