@@ -16,13 +16,6 @@ knitr::opts_chunk$set(
   comment = "#>"
 )
 
-library(cvEpicurveSelect)
-
-if (requireNamespace("tidyverse", quietly = TRUE)) {
-  library(tidyverse)
-} else {
-  message("tidyverse not installed; install it to run examples.")
-}
 
 cat('<h4 style="font-size:0.9em;"><b>Figure 1</b></h4>')
 cat('<h4 style="font-size:0.9em;"><b>Figure 2</b></h4>')
@@ -44,14 +37,40 @@ cat('<p style="font-size:0.8em; margin-top:1em;">Simplified version to demo</p>'
 
 
 ## Introduction
-The purpose of this package is to efficiently identify a set of locations whose weighted linear combination best captures epidemic dynamics for a target location.
+The purpose of this package is to help find a set of areas that look like the epidemic pattern of a target location — for example, when choosing comparison areas to evaluate an intervention or when designing a sentinel surveillance network. Under the hood, it does this efficiently by combining potential control areas in a weighted way that best matches the target area, using a stepwise cross-validation approach. 
+
 
 Potential use-cases include the following:
 
-* Identify control sites as counterfactuals for evaluating the impact of area-level interventions (e.g. select a group of counties that can best serve as a control for a county implementing a vector-control strategy to estimate the effect)
-* Select surveillance sites representative of epidemic patterns of target surveillance area (ex. select a set of hospitals or clinics as sentinnel surveillance sites that best represent a state's epidemic patterns)
+* Identify control areas as counterfactuals for evaluating the impact of area-level interventions (e.g. select a group of counties that can best serve as a control for a county implementing a vector-control strategy to estimate the effect)
+* Select surveillance areas representative of epidemic patterns of target surveillance area (ex. select a set of hospitals or clinics as sentinel surveillance areas that best represent a state's epidemic patterns)
 
-The package optimizes a method developed by @Scarpino2017 which utilizes a stepwise cross-validation algorithm based on multivariate linear regression models and out-of-sample predictive performance. 
+## Summary of methods
+The package optimizes a method developed by @Scarpino2017 which utilizes a stepwise cross-validation algorithm based on multivariate linear regression models and out-of-sample predictive performance. Briefly, we generate cross-validation (CV) schemes by splitting the time series data into blocks and assigning labels. The blocks for each CV scheme are slightly shifted so that based on a randomly generated start time for the first block. 
+
+For each CV scheme, we use each block once as the testing set while the remaining blocks serve as the training set. Using the training block, we run a regression for each candidate area where the response variable is the time series of cases for the target area and the explanatory variable is the time series of cases for the candidate area. We then apply the coefficients from the regression using training data to the testing block of the candidate area to predict the values for the testing block of the target area. We then assess the performance. In this example, we use squared Pearson correlation (corr²) to quantify how well the cases predicted from cases of control areas matches the observed case time series in the target area. Values of corr² range from 0 to 1, where values closer to 1 indicate stronger predictive performance and values closer to 0 indicate weak performance. We choose the best-performing candidate. We then select the next candidate using a greedy selection process. In this process, we find the next candidate that provides the best performance when combined with the previously-selected best-performing area, adding the one that maximizes out-of-sample performance. The process repeats, each time adding the new best candidate area to the model, until the specified number of areas is chosen. Once added, previously selected candidates are fixed and not re-evaluated in subsequent steps.
+
+We repeat this entire process for each of the CV schemes generated over many iterations. Different CV schemes can produce different selected candidates because the start and end points of each block is shifted by a random amount. Each iteration produces a different set of CV schemes. We then choose the top performing candidates over multiple CV schemes and iterations. 
+
+This approach has several advantages compared to other common approaches such as Principal Component Analysis (PCA), clustering (ex. k-means clustering) and elastic net. These methods do not generate out-of-sample predictions for the target area's case time series. PCA identifies shared temporal patterns that explain the most variance across potential control areas. Clustering groups areas with similar epidemic patterns based on a distance or similarity measure. Elastic net uses in-sample predictions to evaluate weighted combinations of potential control areas, but does not assess out-of-sample predictive performance. Overall, this approach provides a more robust and interpretable way to identify representative control areas by directly optimizing out-of-sample predictive performance over time.
+
+## Getting Started/Installation
+You will need to install the package from GitHub using the `devtools` package. Make sure you have the appropriate versions of`tidyverse` (>= 2.0.0), `Rcpp` (>= 1.0.13) installed as these are required dependencies.  
+
+```{r}
+#If you don't already have devtools installed:
+#install.packages("devtools")
+
+#Then install the package from GitHub
+#devtools::install_github("cliu822/cvEpicurveSelect")
+
+#load package
+library(cvEpicurveSelect)
+
+#load tidyverse for data wrangling
+library(tidyverse)
+```
+
 
 ## Data Input
 To use the selection functions in this package, the following are the necessary input data:
@@ -70,12 +89,24 @@ head(peru_dengue)
 For this example, we will use Lima province as the target area and the remaining provinces in Peru as candidate areas. Therefore, the question we are trying to address is: which of the remaining 115 provinces, when weighted in linear combination, can best replicate the historical epidemic trajectory of dengue experienced by Lima province?
 
 ### Create the target time series
+The target time series (`goal_vec`) is a numeric vector containing weekly dengue case counts for the selected target area (Lima province). It is the epidemic pattern we want to replicate using other provinces.The candidate matrix must align in time with the target time series, with each row representing the same time period as the corresponding element of the target vector.
+
+
 ```{r}
-goal_name <- "LIMA"
+#Create target time series
+goal_name <- "LIMA" ##Make sure the goal name matches exactly how it appears in the dataset (Ex. all caps for "LIMA")
+
+#goal_vec is the weekly dengue case countrs for the target area (Lima province)
 goal_vec <- peru_dengue[peru_dengue$adm_2_name==goal_name, "dengue_total"]
+
+#view first few values
+head(goal_vec)
 ```
 
 ### Create the candidate matrix
+The candidate matrix (`candidate_mat`) contains weekly dengue case counts for all other provinces. Each column corresponds to a candidate province and each row to a week. They must be aligned in time with `goal_vec` where the rows correspond to the vector position
+
+
 ```{r}
 candidate_mat <- peru_dengue%>%
                   mutate(adm_2_name = gsub("\\s+", "", adm_2_name))%>%
@@ -109,15 +140,19 @@ Illustration of the generation of cross-validation (CV) labeling schemes from ti
 * `freq`: Number of time points per year (e.g., 52 for weekly data).
 
 #### *Returns*
-A list of CV labeling schemes. Each element corresponds to a different scheme, assigning a label (e.g., "A", "B", "C") to each time point. 
+A list of CV labeling schemes. Each element corresponds to a different scheme, assigning a block label (e.g., "A", "B", "C") to each time point. 
 
 
 #### *Usage*
 
 **Simplified version to demo**
 
-Here we specify 200 time steps and four CV schemes where each block is 1 year each. This results in three block labels of 1 year each with some time steps unused at the beginning and end of time series.
+Here we specify 200 time steps and four CV schemes where each block is 1 year each. This results in three block labels of 1 year each with some time steps unused at the beginning and end of time series. The number of blocks is determined by dividing the total time step steps by the length of the block. In our case, this is our pre-specified 200 weekly time steps divided by our pre-specified 52 weeks per block (or one year). 
+
 ```{r}
+# set random seed for reproducibility for the randomly selected starting point of each CV scheme
+set.seed(1234)
+
 cv_schemes_simp <- make_cv_schemes(tot_ts = 200, n_cv_schemes=4, block_length=1, freq=52)
 unique(cv_schemes_simp[[1]]) ##Three block labels of 1 year each
 ```
@@ -132,9 +167,15 @@ cv_schemes_simp[[2]]
 ```
 
 **Create CV schemes using the Peru dengue data**
+
+Here we specify that the number of time steps as the total number of time steps available in our dataset using `length(goal_vec)` (1252 time points) and that the length of blocks are 4 years each. This results in a total of 6 blocks or 6 unique block labels. 
+
 ```{r}
+# set random seed for reproducibility for the randomly selected starting point of each CV scheme
+set.seed(1234)
+
 cv_schemes <- make_cv_schemes(tot_ts = length(goal_vec), n_cv_schemes = 4, block_length = 4, freq = 52)
-unique(cv_schemes[[1]]) ##Six block labels of around 4 years each
+unique(cv_schemes[[1]]) ##Six blocks of around 4 years each
 
 ```
 
@@ -144,7 +185,7 @@ unique(cv_schemes[[1]]) ##Six block labels of around 4 years each
 
 
 #### *Figure 2* 
-Illustration of the process for evaluating a single candidate area implemented by the function `eval_candidates()`. We first choose one of the blocks as the test block and the remaining as training (2a). We then regress using the training blocks, predict using the test blocks and assess the performance using the corr² metric. We rotate the test blocks (three in example), repeating the process of regressing, predicting and accessing performance. We then repeat across all the CV schemes (four in example) and all candidate areas (five in example) (2b). The candidate with the best performance metric averaged across all blocks and CV schemes will be selected. 
+Illustration of the process for evaluating a single candidate area implemented by the function `eval_candidates_rcpp()`. We first choose one of the blocks as the test block and the remaining as training (2a). We then regress using the training blocks, predict using the test blocks and assess the performance using the corr² metric. We rotate the test blocks (three in example), repeating the process of regressing, predicting and accessing performance. We then repeat across all the CV schemes (four in example) and all candidate areas (five in example) (2b). The candidate with the best performance metric averaged across all blocks and CV schemes will be selected. 
 
 
 #### *Arguments*
@@ -175,7 +216,7 @@ res_cand <- eval_candidates_rcpp(goal_vec = goal_vec,            #Target time se
 
 ```
 
-The first six `corr²` correspond to the first six candidates with the first block as testing.
+The first six `corr²` correspond to the `corr²` metrics of the first six candidates resulting from the first block as testing. The range for this value is [0,1].  In this example, the first six `corr²`values are 0 because there were no dengue cases in the target area (in our case Lima) in the held out block. In these situations, our code assigns the `corr²` as 0 in the `eval_candidates_rcpp()` function. 
 ```{r}
 res_cand[[1]][1:6]
 ```
@@ -191,7 +232,7 @@ res_cand[[2]][1:6]
 <img src="figures/3_greedy_select.png" width="100%">
 
 #### *Figure 3* 
-Illustration of the process of selecting `n_select` candidate areas, using the greedy selection algorithm. In each step, the algorithm selects the option that offers the best improrvement without reconsidering past decisions. The candidate that yields the greatest performance in combination with previously selected candidates is the one that is added to the set of selected candidates. The selected candidates are fixed and are not reconsidered or removed in subsequent steps.
+Illustration of the process of selecting `n_select` candidate areas, using the greedy selection algorithm. In each step, the algorithm selects the option that offers the best improvement without reconsidering past decisions. At each step, the function evaluates which additional area, when added to the exsiting selections, maximizes the squared correlation (corr²) The previously selected candidates are fixed and are not reconsidered or removed in subsequent steps.
 
 #### *Arguments*
 
@@ -266,7 +307,7 @@ res_pred <- pred_targ(goal_vec, sel_cases)   ##Use the selected candidates to pr
 The overall `corr²` is **`r res_pred$corr2`**.
 
 #### Visualize the predicted vs target
-```{r fig.width=7, fig.height=4, echo=FALSE, message=FALSE, warning=FALSE}
+```{r fig.width=7, fig.height=4, echo=TRUE, message=FALSE, warning=FALSE}
 data.frame(Week = 1:length(goal_vec),
            Actual = goal_vec,
            Predicted = res_pred$pred)%>%
