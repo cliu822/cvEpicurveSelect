@@ -81,7 +81,20 @@ greedy_select_candidate <- function(goal_vec, candidate_mat, cv_schemes, n_selec
       candidate_corr2_scores[cand] <- avg_corr2
     }
     
-    best_cand <- names(which.max(candidate_corr2_scores))
+    #best_cand <- names(which.max(candidate_corr2_scores))  ##Selects first alphabetical
+    
+    
+    # ---- tie-break: fair coin flip among true ties ----
+    best_val <- suppressWarnings(max(candidate_corr2_scores, na.rm = TRUE))
+    if (!is.finite(best_val)) {
+      stop(sprintf("All candidate scores are NA at step %d. Check CV schemes or eval function outputs.", i))
+    }
+    ties <- names(candidate_corr2_scores)[!is.na(candidate_corr2_scores) &
+                                            candidate_corr2_scores == best_val]
+    
+  
+    best_cand <- sample(ties, 1)
+    
     selected_names <- c(selected_names, best_cand)
     corr2_per_step <- c(corr2_per_step, candidate_corr2_scores[best_cand])
     
