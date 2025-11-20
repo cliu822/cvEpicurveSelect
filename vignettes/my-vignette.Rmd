@@ -62,6 +62,7 @@ You will need to install the package from GitHub using the `devtools` package. M
 #install.packages("devtools")
 
 #Then install the package from GitHub
+##NB: May be best to skip updates when prompted at this point
 #devtools::install_github("cliu822/cvEpicurveSelect")
 
 #load package
@@ -78,38 +79,32 @@ To use the selection functions in this package, the following are the necessary 
 * **Target time series**:  A numeric vector of length *t*, representing case counts for the target location at uniform time intervals (e.g. weekly)
 * **Candidate matrix**: A numeric matrix with *t* rows and *c* columns, where each column corresponds to the time series of cases for a candidate location (excluding the target). The rows must be aligned in time with the target time series. 
 
-Examples from this package use data from OpenDengue (Source: @opendengue2025). We use weekly data on dengue cases from Peru reported between 2000 to 2023. The data is stratified by administrative level 2 or the province.  We load the data below.
+Examples from this package use data from OpenDengue (Source: @opendengue2025). We use weekly data on dengue cases from Colombia reported between 2000 to 2023. The data is stratified by administrative level 2 or the province.  We load the data below.
 
 ```{r}
-data("peru_dengue")
+data("colombia_dengue")
 
-head(peru_dengue)
+head(colombia_dengue)
 ```
 
-For this example, we will use Lima province as the target area and the remaining provinces in Peru as candidate areas. Therefore, the question we are trying to address is: which of the remaining 115 provinces, when weighted in linear combination, can best replicate the historical epidemic trajectory of dengue experienced by Lima province?
+For this example, we will use Lima province as the target area and the remaining provinces in Colombia as candidate areas. Therefore, the question we are trying to address is: which of the remaining 115 provinces, when weighted in linear combination, can best replicate the historical epidemic trajectory of dengue experienced by Lima province?
 
 ### Create the target time series
-The target time series (`goal_vec`) is a numeric vector containing weekly dengue case counts for the selected target area (Lima province). It is the epidemic pattern we want to replicate using other provinces.The candidate matrix must align in time with the target time series, with each row representing the same time period as the corresponding element of the target vector.
+The target time series (`goal_vec`) is a numeric vector containing weekly dengue case counts for the selected target area (Cali Province). It is the epidemic pattern we want to replicate using other provinces.The candidate matrix must align in time with the target time series, with each row representing the same time period as the corresponding element of the target vector.
 
 
 ```{r}
 #Create target time series
-goal_name <- "LIMA" ##Make sure the goal name matches exactly how it appears in the dataset (Ex. all caps for "LIMA")
+goal_name <- "CALI_VAC" ##Make sure the goal name matches exactly how it appears in the dataset (Ex. all caps for "CALI_VAC")
 
-#goal_vec is the weekly dengue case countrs for the target area (Lima province)
-#peru_dengue_pre2023 <- peru_dengue[peru_dengue$calendar_end_date <=as.Date("2022-06-01"),]
-peru_dengue_pre2023 <- peru_dengue[peru_dengue$year<2022,]
-goal_vec <- peru_dengue_pre2023[peru_dengue_pre2023$adm_2_name==goal_name, "dengue_total"]
+#goal_vec is the weekly dengue case countrs for the target area (Cali province)
+#In this example, we are using pre-2019 dengue case data to select for controls and we will use post-2019 case data as a form of out-of-sample validation
+colombia_dengue_pre2019 <- colombia_dengue[colombia_dengue$year<2019,]
+goal_vec <- colombia_dengue_pre2019[colombia_dengue_pre2019$adm_2_name==goal_name, "dengue_total"]
 
 #view first few values
 head(goal_vec)
 
-#goal_vec<-peru_dengue[peru_dengue$adm_2_name==goal_name, "dengue_total"]
-
-peru_dengue_pre2023%>%
-  filter(adm_2_name=="LIMA")%>%
-ggplot()+
-  geom_line(aes(x=calendar_start_date, y=dengue_total))
 ```
 
 ### Create the candidate matrix
@@ -117,7 +112,7 @@ The candidate matrix (`candidate_mat`) contains weekly dengue case counts for al
 
 
 ```{r}
-candidate_mat <- peru_dengue_pre2023%>%
+candidate_mat <- colombia_dengue_pre2019%>%
                   mutate(adm_2_name = gsub("\\s+", "", adm_2_name))%>%
                   filter(adm_2_name!=goal_name)%>%
                  select(calendar_start_date, adm_2_name,dengue_total)%>%
@@ -175,16 +170,16 @@ cv_schemes_simp[[1]]
 cv_schemes_simp[[2]]
 ```
 
-**Create CV schemes using the Peru dengue data**
+**Create CV schemes using the Colombia dengue data**
 
-Here we specify that the number of time steps as the total number of time steps available in our dataset using `length(goal_vec)` (1252 time points) and that the length of blocks are 4 years each. This results in a total of 6 blocks or 6 unique block labels. 
+Here we specify that the number of time steps as the total number of time steps available in our dataset using `length(goal_vec)` (992 weekly time points) and that the length of blocks are 4 years each. This results in a total of 6 blocks or 6 unique block labels. 
 
 ```{r}
 # set random seed for reproducibility for the randomly selected starting point of each CV scheme
 set.seed(1234)
 
 cv_schemes <- make_cv_schemes(tot_ts = length(goal_vec), n_cv_schemes = 4, block_length = 4, freq = 52)
-unique(cv_schemes[[1]]) ##Six blocks of around 4 years each
+unique(cv_schemes[[1]]) ##Five blocks of around 4 years each. NB the ZZ block are discarded labaeling at the beginning of the time series which allows the blocks to be shifted in time for different cv_schemes
 
 ```
 
@@ -285,7 +280,7 @@ In practice, we will run many iterations of the algorithm and then select the be
 
 #### Run over many iterations
 ```{r message=F}
-nit <- 20  ##Number of iterations
+nit <- 5  ##Number of iterations
 n_sel<-5    ##Number of municipalities to select
 sel_mat <- matrix(NA,ncol=n_sel,nrow=nit)
 corr2_mat    <- matrix(NA,ncol=n_sel,nrow=nit)
@@ -307,6 +302,8 @@ sel_vec <- order_select(sel_mat)[1:n_sel,"Area"]   ##Choose the n_sel number of 
 sel_cases <-as.data.frame(candidate_mat[,sel_vec]) ##Get the cases from those candidate areas
 
 print(sel_vec)
+
+
 ```
 #### Use the selected candidates to predict the target
 We use time series of cases from the selected candidate area to predict the time series of cases from the target area using multivariate linear regression.
@@ -319,7 +316,7 @@ res_pred$corr2
 
 The overall `corr²` is **`r res_pred$corr2`**.
 
-#### Visualize the predicted vs target
+#### Visualize the in-sample predicted vs target
 ```{r fig.width=7, fig.height=4, echo=TRUE, message=FALSE, warning=FALSE}
 
 data.frame(Week = 1:length(goal_vec),
@@ -327,14 +324,13 @@ data.frame(Week = 1:length(goal_vec),
            Predicted = res_pred$pred)%>%
   
   pivot_longer(cols = c("Actual", "Predicted"), names_to = "Type", values_to = "Cases")%>%
-  #filter(Week<=688)%>%
   mutate(Date = as.Date("2000-01-02") + weeks(Week - 1))%>%
   
   ggplot()+
   scale_x_date(date_breaks = "1 year", date_labels = "%Y") +
   geom_line(aes(x = Date, y = Cases, color = Type),size = 1) +
   
-  labs(title = "Actual vs. Predicted (Lima)",
+  labs(title = "Actual vs. Predicted (Cali, Colombia)",
        x = "Week",
        y = "Cases") +
   theme_minimal()+ guides(color = guide_legend(title = NULL))+
@@ -343,49 +339,98 @@ data.frame(Week = 1:length(goal_vec),
 ```
 #### Map of selected control areas
 
+```{r}
+##Match the condensed admin 2 level name to full data set to get admin level 1
+names<- colombia_dengue%>%select(adm_0_name, adm_1_name, adm_2_name) %>%unique()%>%                          mutate(adm_2_name = gsub("\\s+", "", adm_2_name))
+
+sel_name_full <- names%>% filter(adm_2_name%in%c(unlist(sel_vec),goal_name))%>%
+                          mutate(class = ifelse(adm_2_name==goal_name,"Target","Control"))%>%
+                          mutate(adm_2_name = sub("_[A-Za-z]{3}$", "", adm_2_name))
+
+col_adm2_sf <- col_adm2_sf%>%
+  mutate(NAME_1 = toupper(NAME_1),
+         NAME_1 = stringi::stri_trans_general(NAME_1, "Latin-ASCII"),
+         NAME_2 = stringi::stri_trans_general(NAME_2, "Latin-ASCII"),
+         NAME_2 = toupper(gsub("\\s+", "", NAME_2)))%>%
+  mutate(NAME_1 =
+           case_when(NAME_1 == "BOGOTA D.C."~"BOGOTA",
+                     NAME_1 == "LA GUAJIRA"~"GUAJIRA",
+                     NAME_1 == "NORTE DE SANTANDER"~"NORTE SANTANDER",
+                     NAME_1 == "SAN ANDRES Y PROVIDENCIA"~"SAN ANDRES",
+                     NAME_1 == "VALLE DEL CAUCA" ~"VALLE",
+                     TRUE ~NAME_1),
+         NAME_2 = ifelse(NAME_2 == "SANTIAGODECALI","CALI", NAME_2))
+
+
+col_adm2_sf <- col_adm2_sf%>%
+                  left_join(sel_name_full, by = c("NAME_1" = "adm_1_name",
+                                                  "NAME_2" = "adm_2_name"))
+  
+ ggplot() +
+  geom_sf(data = col_adm2_sf, aes(fill = class), color = NA) +  # fill only
+  geom_sf(data = col_adm0_sf, fill = NA, color = "black", linewidth = 0.4) +   # outer boundary
+  
+  scale_fill_manual(na.value = "white",values= c("Target"="darkblue", "Control"="pink")) +
+  theme_minimal() +
+  theme(
+    panel.grid.major = element_blank(),
+    panel.grid.minor = element_blank(),
+    axis.text = element_blank(),
+    axis.title = element_blank()
+  )
+
+```
+
+
 #### Controlled Interrupted Time Series for hypothetical intervention
 After control areas are selected, we can run various analysis of interest. For example, if we would like to estimate the effect of an intervention implemented at a specific time point `t`, we can use a Controlled Interrupted Time Series (CTIS). 
 
-Below we consider a hypothetical intervention implemented on January 2023. We consider the time period before 2023 as the pre-intervention period and 2023 as the post-intervention period. 
+Below we consider a hypothetical intervention implemented on January 2020. We consider the time period before 2020 as the pre-intervention period and 2020 as the post-intervention period. 
+
+First we recreate the time series of target and selected controls up until December 2022. Remember that we fit the model using case data prior to 2020 which we consider the pre-intervention period. 
 
 ```{r}
+
 ##y = vector of target time series 
 ##X = matrix of time series of selected candidates
 
-peru_dengue <- peru_dengue%>%filter(year<2023)
-y <- peru_dengue[peru_dengue$adm_2_name==goal_name, "dengue_total"]
+y <- colombia_dengue[colombia_dengue$adm_2_name==goal_name, "dengue_total"]
 
-X <- peru_dengue%>%
+X <- colombia_dengue%>%
                   mutate(adm_2_name = gsub("\\s+", "", adm_2_name))%>%
                   filter(adm_2_name!=goal_name)%>%
                  select(calendar_start_date, adm_2_name,dengue_total)%>%
                   pivot_wider(names_from = "adm_2_name", values_from ="dengue_total")%>%
                   select(-calendar_start_date)%>%
                   select(sel_vec)%>%
-                  as.matrix()  
-t_int=1148
-t_pre <- seq_len(t_int - 1)
+                  as.matrix()
+```
 
-#y[t_int:length(y)] <- 0.05 * y[t_int:length(y)]
+Next we split up the data between pre and post hypothetical intervention. We fit the linear model to the pre-intervention period to obtain the weights for control areas. we prepare the dataset to run the controlled interrupted time series analysis (CITS).
+```{r}
+date_int <- as.Date("2020-01-01")    #date of hypothetical intervention
+last_before <- max(colombia_dengue$calendar_start_date[colombia_dengue$calendar_start_date < date_int])  
+t_int=which(unique(colombia_dengue$calendar_start_date)==last_before)   #get the time step with the date of hypothetical intervention
+
+t_pre <- seq_len(t_int - 1)          #Vector of pre-intervention time steps
+
 
 ##Fit pre-period linear model to get weights 
-fit_pre <- lm(y[t_pre] ~ 0 + as.matrix(X[t_pre, , drop = FALSE]))  # no intercept -> pure weights
+fit_pre <- lm(y[t_pre] ~ as.matrix(X[t_pre, , drop = FALSE])) 
 w <- coef(fit_pre)
 w[is.na(w)] <- 0
 
 
-Tn <- length(y)
-post <- as.integer(seq_len(Tn) >= t_int)
-time <- seq_len(Tn)
+Tn <- length(y)                          #Total time steps
+time <- seq_len(Tn)                      #Vector of time steps
 
 # Construct control over full period
-control_df <- data.frame(Yt=drop(as.matrix(X) %*% w),
+control_df <- data.frame(Yt=drop(as.matrix(X) %*% w),  ##Apply weights to the entire time series which predicts the counterfactual in the post-intervention period
                          T=time,
                          Xt=ifelse(time<t_int,0,1),
                          G=0)
-##Center time at the intervention
-#t_center <- time - (t - 1)
-#post_t   <- post * t_center
+
+#Construct the target over full period, in this case denoted as the intervention site
 
 int_df <- data.frame(Yt = y, 
                      T = time,
@@ -393,6 +438,62 @@ int_df <- data.frame(Yt = y,
                      G=1)
 
 dat<- bind_rows(control_df,int_df)
+```
+
+##### Visualize the the pre and post-intervention data for the target Cali and weighted control
+```{r}
+ggplot(dat, aes(x = T, y = Yt, color = as.factor(G))) +
+  geom_point(alpha = 0.6) +
+  geom_vline(xintercept = t_int, linetype = "dashed", color = "red") +
+  labs(
+    title = "Cali vs Weighted Control",
+    subtitle = "Control weighted to pre-intervention period & predicted for post-intervention period",
+    x = "Time", 
+    y = "Outcome",
+    color = "Group"
+  ) +
+  scale_color_manual(
+    values = c("0" = "pink", "1" = "darkblue"),
+    labels = c("0" = "Weighted Control", "1" = "Cali")
+  ) +
+  theme_minimal()
+
+```
+
+For the CITS, we will be using the method described by @Bernal2018 with the equations below. 
+
+$$
+Y_t = \beta_0 
+    + \beta_1 T
+    + \beta_2 X
+    + \beta_3 T X
+    + \beta_4 G
+    + \beta_5 G T
+    + \beta_6 G X
+    + \beta_7 G X T
+$$
+Variables:
+
+* $Y_t$: outcome variable at time t
+* $T$:   time since the start of the study
+* $X$:   dummy variable indicating the pre- or post-intervention period
+* $G$:   dummy variable indicated intervention group of target (G=1) or weighted control (G=0). 
+
+Estimated parameters:
+
+* $β_0$: intercept at T=0 for G=0
+* $β_1$: change in outcome associated per time unit increase (representing the underlying pre-intervention trend)
+* $β_2$: level change following the intervention in the control group
+* $β_3$: slope change following the intervention
+* $β_4$: difference in intercept between G=0 and G=1 at T=0
+* $β_5$: slope difference between the intervention and control group in the pre-intervention period
+* $β_6$: difference between the change in level in the control and intervention group associated with the intervention
+* $β_7$: difference between the change in slope in the control and intervention group associated with the intervention
+
+$β_6$ and $β_7$ are the parameters of interest for the measures of effect.
+
+
+```{r}
 dat <- dat%>%
         mutate(T_Xt = T*Xt,
                G_T  = G*T,
@@ -403,34 +504,13 @@ fit <- nlme::gls(
       Yt ~ T +Xt+T_Xt+G+G_T+G_Xt+G_Xt_T,
       #Yt ~ T +Xt+T_Xt+G+G_T+G_Xt,
       data = dat,
-      correlation = nlme::corARMA(p = 1)
+      correlation = nlme::corARMA(p = 1)    ##Autoregressive moving average term with, p=1 means one lag of residual effects current residual 
     )
 cf <- summary(fit)$tTable
 
-freq=52
-fit <- lm(Yt ~ T +Xt+T:Xt+G+G:T+G:Xt+G:Xt:T,data = dat)
-    # lag selection: roughly seasonal? set lag = round(freq/4) as a mild default
-lagNW <- max(1L, round(freq / 4))
-vc   <- sandwich::NeweyWest(fit, lag = lagNW, prewhite = FALSE, adjust = TRUE)
-ct   <- lmtest::coeftest(fit, vcov. = vc)
-
-
-ggplot(dat, aes(x = T, y = Yt, color = as.factor(G))) +
-  geom_point(alpha = 0.6) +
-  geom_vline(xintercept = t_int, linetype = "dashed", color = "red") +
-  labs(
-    title = "Interrupted Time Series: Lima vs Weighted Control",
-    x = "Time", 
-    y = "Outcome",
-    color = "Group"
-  ) +
-  scale_color_manual(
-    values = c("0" = "darkgray", "1" = "steelblue"),
-    labels = c("0" = "Weighted Control", "1" = "Lima")
-  ) +
-  theme_minimal()
-
+cf
 ```
+
 
 
 ## Selecting values for parameters
