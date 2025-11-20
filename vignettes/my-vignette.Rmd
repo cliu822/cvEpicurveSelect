@@ -97,10 +97,19 @@ The target time series (`goal_vec`) is a numeric vector containing weekly dengue
 goal_name <- "LIMA" ##Make sure the goal name matches exactly how it appears in the dataset (Ex. all caps for "LIMA")
 
 #goal_vec is the weekly dengue case countrs for the target area (Lima province)
-goal_vec <- peru_dengue[peru_dengue$adm_2_name==goal_name, "dengue_total"]
+#peru_dengue_pre2023 <- peru_dengue[peru_dengue$calendar_end_date <=as.Date("2022-06-01"),]
+peru_dengue_pre2023 <- peru_dengue[peru_dengue$year<2022,]
+goal_vec <- peru_dengue_pre2023[peru_dengue_pre2023$adm_2_name==goal_name, "dengue_total"]
 
 #view first few values
 head(goal_vec)
+
+#goal_vec<-peru_dengue[peru_dengue$adm_2_name==goal_name, "dengue_total"]
+
+peru_dengue_pre2023%>%
+  filter(adm_2_name=="LIMA")%>%
+ggplot()+
+  geom_line(aes(x=calendar_start_date, y=dengue_total))
 ```
 
 ### Create the candidate matrix
@@ -108,7 +117,7 @@ The candidate matrix (`candidate_mat`) contains weekly dengue case counts for al
 
 
 ```{r}
-candidate_mat <- peru_dengue%>%
+candidate_mat <- peru_dengue_pre2023%>%
                   mutate(adm_2_name = gsub("\\s+", "", adm_2_name))%>%
                   filter(adm_2_name!=goal_name)%>%
                  select(calendar_start_date, adm_2_name,dengue_total)%>%
@@ -232,7 +241,7 @@ res_cand[[2]][1:6]
 <img src="figures/3_greedy_select.png" width="100%">
 
 #### *Figure 3* 
-Illustration of the process of selecting `n_select` candidate areas, using the greedy selection algorithm. In each step, the algorithm selects the option that offers the best improvement without reconsidering past decisions. At each step, the function evaluates which additional area, when added to the exsiting selections, maximizes the squared correlation (corr²) The previously selected candidates are fixed and are not reconsidered or removed in subsequent steps.
+Illustration of the process of selecting `n_select` candidate areas, using the greedy selection algorithm. In each step, the algorithm selects the option that offers the best improvement without reconsidering past decisions. At each step, the function evaluates which additional area, when added to the exsiting selections, maximizes the squared correlation (corr²). The previously selected candidates are fixed and are not reconsidered or removed in subsequent steps. In cases of ties, the best candidate is selected at random between the tied candidates. 
 
 #### *Arguments*
 
@@ -276,7 +285,7 @@ In practice, we will run many iterations of the algorithm and then select the be
 
 #### Run over many iterations
 ```{r message=F}
-nit <- 5  ##Number of iterations
+nit <- 20  ##Number of iterations
 n_sel<-5    ##Number of municipalities to select
 sel_mat <- matrix(NA,ncol=n_sel,nrow=nit)
 corr2_mat    <- matrix(NA,ncol=n_sel,nrow=nit)
@@ -300,14 +309,19 @@ sel_cases <-as.data.frame(candidate_mat[,sel_vec]) ##Get the cases from those ca
 print(sel_vec)
 ```
 #### Use the selected candidates to predict the target
+We use time series of cases from the selected candidate area to predict the time series of cases from the target area using multivariate linear regression.
+
 ```{r}
 res_pred <- pred_targ(goal_vec, sel_cases)   ##Use the selected candidates to predict the target
+
+res_pred$corr2
 ```
 
 The overall `corr²` is **`r res_pred$corr2`**.
 
 #### Visualize the predicted vs target
 ```{r fig.width=7, fig.height=4, echo=TRUE, message=FALSE, warning=FALSE}
+
 data.frame(Week = 1:length(goal_vec),
            Actual = goal_vec,
            Predicted = res_pred$pred)%>%
@@ -327,5 +341,106 @@ data.frame(Week = 1:length(goal_vec),
   theme( legend.position = "bottom", legend.direction = "horizontal", legend.box = "horizontal",
          axis.text.x = element_text(angle = 45, hjust = 1))
 ```
+#### Map of selected control areas
+
+#### Controlled Interrupted Time Series for hypothetical intervention
+After control areas are selected, we can run various analysis of interest. For example, if we would like to estimate the effect of an intervention implemented at a specific time point `t`, we can use a Controlled Interrupted Time Series (CTIS). 
+
+Below we consider a hypothetical intervention implemented on January 2023. We consider the time period before 2023 as the pre-intervention period and 2023 as the post-intervention period. 
+
+```{r}
+##y = vector of target time series 
+##X = matrix of time series of selected candidates
+
+peru_dengue <- peru_dengue%>%filter(year<2023)
+y <- peru_dengue[peru_dengue$adm_2_name==goal_name, "dengue_total"]
+
+X <- peru_dengue%>%
+                  mutate(adm_2_name = gsub("\\s+", "", adm_2_name))%>%
+                  filter(adm_2_name!=goal_name)%>%
+                 select(calendar_start_date, adm_2_name,dengue_total)%>%
+                  pivot_wider(names_from = "adm_2_name", values_from ="dengue_total")%>%
+                  select(-calendar_start_date)%>%
+                  select(sel_vec)%>%
+                  as.matrix()  
+t_int=1148
+t_pre <- seq_len(t_int - 1)
+
+#y[t_int:length(y)] <- 0.05 * y[t_int:length(y)]
+
+##Fit pre-period linear model to get weights 
+fit_pre <- lm(y[t_pre] ~ 0 + as.matrix(X[t_pre, , drop = FALSE]))  # no intercept -> pure weights
+w <- coef(fit_pre)
+w[is.na(w)] <- 0
+
+
+Tn <- length(y)
+post <- as.integer(seq_len(Tn) >= t_int)
+time <- seq_len(Tn)
+
+# Construct control over full period
+control_df <- data.frame(Yt=drop(as.matrix(X) %*% w),
+                         T=time,
+                         Xt=ifelse(time<t_int,0,1),
+                         G=0)
+##Center time at the intervention
+#t_center <- time - (t - 1)
+#post_t   <- post * t_center
+
+int_df <- data.frame(Yt = y, 
+                     T = time,
+                     Xt=ifelse(time<t_int,0,1),
+                     G=1)
+
+dat<- bind_rows(control_df,int_df)
+dat <- dat%>%
+        mutate(T_Xt = T*Xt,
+               G_T  = G*T,
+               G_Xt = G*Xt,
+               G_Xt_T=G*Xt*T)
+
+fit <- nlme::gls(
+      Yt ~ T +Xt+T_Xt+G+G_T+G_Xt+G_Xt_T,
+      #Yt ~ T +Xt+T_Xt+G+G_T+G_Xt,
+      data = dat,
+      correlation = nlme::corARMA(p = 1)
+    )
+cf <- summary(fit)$tTable
+
+freq=52
+fit <- lm(Yt ~ T +Xt+T:Xt+G+G:T+G:Xt+G:Xt:T,data = dat)
+    # lag selection: roughly seasonal? set lag = round(freq/4) as a mild default
+lagNW <- max(1L, round(freq / 4))
+vc   <- sandwich::NeweyWest(fit, lag = lagNW, prewhite = FALSE, adjust = TRUE)
+ct   <- lmtest::coeftest(fit, vcov. = vc)
+
+
+ggplot(dat, aes(x = T, y = Yt, color = as.factor(G))) +
+  geom_point(alpha = 0.6) +
+  geom_vline(xintercept = t_int, linetype = "dashed", color = "red") +
+  labs(
+    title = "Interrupted Time Series: Lima vs Weighted Control",
+    x = "Time", 
+    y = "Outcome",
+    color = "Group"
+  ) +
+  scale_color_manual(
+    values = c("0" = "darkgray", "1" = "steelblue"),
+    labels = c("0" = "Weighted Control", "1" = "Lima")
+  ) +
+  theme_minimal()
+
+```
+
+
+## Selecting values for parameters
+* We recommend using a minimum of three blocks. With fewer than three blocks, the cross-validation becomes a single train-test split which limits the model's ability to generalize across multiple, potentially distcint temporal phases in the data. 
+* We also recommend at least 1 year of observations for each block so that each block contains sufficient temporal variation. This is especially important for infections like dengue with seasonal epidemic patterns.Larger blocks each with more years of data may be beneficial if there is more heterogeneity between years in the time series. 
+
+##Common pitfalls
+* Missing values in the time series data should be avoided for both the target area and candidates area. Missing values in a specific training block will result in an NA for performance metric for that block and may bias the selection.  
+
+## Future work
+* In future package versions, we will consider allowing performance to be evaluated using other metrics such as the Mean Absolute Error (MAE) and the Root Mean Squared Error (RMSE)
 
 ## References
