@@ -65,8 +65,7 @@ You will need to install the package from GitHub using the `devtools` package. M
 
 #Then install the package from GitHub
 ##NB: May be best to skip updates when prompted at this point
-#devtools::install_github("cliu822/cvEpicurveSelect", )
-
+#devtools::install_github("cliu822/cvEpicurveSelect", force = TRUE,build_vignettes = TRUE)
 
 library(cvEpicurveSelect)  #load package
 library(tidyverse)         #load tidyverse for data wrangling
