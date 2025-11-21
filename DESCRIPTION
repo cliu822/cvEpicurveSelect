@@ -11,7 +11,9 @@ RoxygenNote: 7.3.2
 Depends: R (>= 3.5.0)
 Imports: Rcpp (>= 1.0.13),
          tidyverse (>= 2.0.0),
-         stats
+         stats,
+         nlme,
+         sf
 LinkingTo: Rcpp, RcppArmadillo
 LazyData: true
 Suggests: 

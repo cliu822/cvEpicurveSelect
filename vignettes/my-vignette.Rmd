@@ -63,13 +63,11 @@ You will need to install the package from GitHub using the `devtools` package. M
 
 #Then install the package from GitHub
 ##NB: May be best to skip updates when prompted at this point
-#devtools::install_github("cliu822/cvEpicurveSelect")
+#devtools::install_github("cliu822/cvEpicurveSelect", )
 
-#load package
-library(cvEpicurveSelect)
 
-#load tidyverse for data wrangling
-library(tidyverse)
+library(cvEpicurveSelect)  #load package
+library(tidyverse)         #load tidyverse for data wrangling
 ```
 
 
@@ -155,7 +153,7 @@ Here we specify 200 time steps and four CV schemes where each block is 1 year ea
 
 ```{r}
 # set random seed for reproducibility for the randomly selected starting point of each CV scheme
-set.seed(1234)
+set.seed(12345)
 
 cv_schemes_simp <- make_cv_schemes(tot_ts = 200, n_cv_schemes=4, block_length=1, freq=52)
 unique(cv_schemes_simp[[1]]) ##Three block labels of 1 year each
@@ -176,7 +174,7 @@ Here we specify that the number of time steps as the total number of time steps 
 
 ```{r}
 # set random seed for reproducibility for the randomly selected starting point of each CV scheme
-set.seed(1234)
+set.seed(54321)
 
 cv_schemes <- make_cv_schemes(tot_ts = length(goal_vec), n_cv_schemes = 4, block_length = 4, freq = 52)
 unique(cv_schemes[[1]]) ##Five blocks of around 4 years each. NB the ZZ block are discarded labaeling at the beginning of the time series which allows the blocks to be shifted in time for different cv_schemes
@@ -280,7 +278,7 @@ In practice, we will run many iterations of the algorithm and then select the be
 
 #### Run over many iterations
 ```{r message=F}
-nit <- 5  ##Number of iterations
+nit <- 20  ##Number of iterations
 n_sel<-5    ##Number of municipalities to select
 sel_mat <- matrix(NA,ncol=n_sel,nrow=nit)
 corr2_mat    <- matrix(NA,ncol=n_sel,nrow=nit)
@@ -316,8 +314,8 @@ res_pred$corr2
 
 The overall `corr²` is **`r res_pred$corr2`**.
 
-#### Visualize the in-sample predicted vs target
-```{r fig.width=7, fig.height=4, echo=TRUE, message=FALSE, warning=FALSE}
+#### Visualize the observed target and predicted control
+```{r echo=TRUE, message=FALSE, warning=FALSE}
 
 data.frame(Week = 1:length(goal_vec),
            Actual = goal_vec,
@@ -328,9 +326,13 @@ data.frame(Week = 1:length(goal_vec),
   
   ggplot()+
   scale_x_date(date_breaks = "1 year", date_labels = "%Y") +
-  geom_line(aes(x = Date, y = Cases, color = Type),size = 1) +
+  geom_point(aes(x = Date, y = Cases, color = Type),size = 1.5,alpha = 0.6) +
   
-  labs(title = "Actual vs. Predicted (Cali, Colombia)",
+  scale_color_manual(
+    values = c("Actual"    = "darkblue","Predicted" = "pink"),
+    labels = c("Actual"    = "Observed target","Predicted" = "Predicted control")) +
+  
+  labs(title = "Observed target (Cali, Colombia) vs. predicted control",
        x = "Week",
        y = "Cases") +
   theme_minimal()+ guides(color = guide_legend(title = NULL))+
@@ -347,37 +349,36 @@ sel_name_full <- names%>% filter(adm_2_name%in%c(unlist(sel_vec),goal_name))%>%
                           mutate(class = ifelse(adm_2_name==goal_name,"Target","Control"))%>%
                           mutate(adm_2_name = sub("_[A-Za-z]{3}$", "", adm_2_name))
 
-col_adm2_sf <- col_adm2_sf%>%
-  mutate(NAME_1 = toupper(NAME_1),
-         NAME_1 = stringi::stri_trans_general(NAME_1, "Latin-ASCII"),
-         NAME_2 = stringi::stri_trans_general(NAME_2, "Latin-ASCII"),
-         NAME_2 = toupper(gsub("\\s+", "", NAME_2)))%>%
-  mutate(NAME_1 =
-           case_when(NAME_1 == "BOGOTA D.C."~"BOGOTA",
-                     NAME_1 == "LA GUAJIRA"~"GUAJIRA",
-                     NAME_1 == "NORTE DE SANTANDER"~"NORTE SANTANDER",
-                     NAME_1 == "SAN ANDRES Y PROVIDENCIA"~"SAN ANDRES",
-                     NAME_1 == "VALLE DEL CAUCA" ~"VALLE",
-                     TRUE ~NAME_1),
-         NAME_2 = ifelse(NAME_2 == "SANTIAGODECALI","CALI", NAME_2))
-
+data("col_adm2_sf")
+data("col_adm0_sf")
 
 col_adm2_sf <- col_adm2_sf%>%
                   left_join(sel_name_full, by = c("NAME_1" = "adm_1_name",
                                                   "NAME_2" = "adm_2_name"))
   
- ggplot() +
+col_adm2_sf <- col_adm2_sf %>%
+  left_join(sel_name_full, 
+            by = c("NAME_1" = "adm_1_name",
+                   "NAME_2" = "adm_2_name"))
+
+ggplot() +
   geom_sf(data = col_adm2_sf, aes(fill = class), color = NA) +  # fill only
   geom_sf(data = col_adm0_sf, fill = NA, color = "black", linewidth = 0.4) +   # outer boundary
   
-  scale_fill_manual(na.value = "white",values= c("Target"="darkblue", "Control"="pink")) +
+  scale_fill_manual(
+    values = c("Target" = "darkblue", "Control" = "pink"),
+    na.value = "white",
+    name = NULL,          # removes legend title
+    na.translate = FALSE  # removes NA label from legend
+  ) +
+  
   theme_minimal() +
-  theme(
-    panel.grid.major = element_blank(),
-    panel.grid.minor = element_blank(),
-    axis.text = element_blank(),
-    axis.title = element_blank()
-  )
+  theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
+        axis.text = element_blank(),axis.title = element_blank()) +
+  ggtitle("Map of target and selected controls")
+
+ 
+
 
 ```
 
@@ -402,7 +403,7 @@ X <- colombia_dengue%>%
                  select(calendar_start_date, adm_2_name,dengue_total)%>%
                   pivot_wider(names_from = "adm_2_name", values_from ="dengue_total")%>%
                   select(-calendar_start_date)%>%
-                  select(sel_vec)%>%
+                  select(all_of(sel_vec))%>%
                   as.matrix()
 ```
 
@@ -416,8 +417,8 @@ t_pre <- seq_len(t_int - 1)          #Vector of pre-intervention time steps
 
 
 ##Fit pre-period linear model to get weights 
-fit_pre <- lm(y[t_pre] ~ as.matrix(X[t_pre, , drop = FALSE])) 
-w <- coef(fit_pre)
+fit_pre <- lm(y[t_pre] ~ 0+as.matrix(X[t_pre, , drop = FALSE])) 
+w <- as.vector(coef(fit_pre))
 w[is.na(w)] <- 0
 
 
@@ -511,7 +512,7 @@ cf <- summary(fit)$tTable
 cf
 ```
 
-
+$β_6$ is 71.73 (SE: 907, p-value = 0.94) which can be interpreted as the difference between the change in level in the weighted control (counterfactual) and the target during the "intervention" period. $β_7$ is -0.07 (SE = 0.84, p-value - 0.933) which can be interpretted as the difference between the change in slope in the weighted control and the target during the "intervention" period. We presented a scenario of a hypothetical intervention to demonstrate the analysis and we do not expect there to be a meaningful change in level or change in slope. The results are in line with our expectations. 
 
 ## Selecting values for parameters
 * We recommend using a minimum of three blocks. With fewer than three blocks, the cross-validation becomes a single train-test split which limits the model's ability to generalize across multiple, potentially distcint temporal phases in the data. 
