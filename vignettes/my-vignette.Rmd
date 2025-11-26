@@ -1,6 +1,6 @@
 ---
 title: "cvEpicurveSelect"
-author: "Carol Y. Liu, Maile B. Thayer, Zachary J. Madewell (+others, author order TBD)"
+author: "Carol Y. Liu, Maile B. Thayer, Zachary J. Madewell"
 date: "`r Sys.Date()`"
 output: rmarkdown::html_vignette
 vignette: >
@@ -37,7 +37,7 @@ cat('<p style="font-size:0.8em; margin-top:1em;">Simplified version to demo</p>'
 
 
 ## Introduction
-The purpose of this package is to help find a set of areas that look like the epidemic pattern of a target location — for example, when choosing comparison areas to evaluate an intervention or when designing a sentinel surveillance network. Under the hood, it does this efficiently by combining potential control areas in a weighted way that best matches the target area, using a stepwise cross-validation approach. 
+The purpose of this package is to help find a set of areas that look like the epidemic pattern of a target area — for example, when choosing comparison areas to evaluate an intervention or when designing a sentinel surveillance network. Under the hood, it does this efficiently by combining potential control areas in a weighted way that best matches the target area, using a stepwise cross-validation approach. 
 
 
 Potential use-cases include the following:
@@ -48,13 +48,13 @@ Potential use-cases include the following:
 ## Summary of methods
 The package optimizes a method developed by @Scarpino2017 which utilizes a stepwise cross-validation algorithm based on multivariate linear regression models and out-of-sample predictive performance. Briefly, we generate cross-validation (CV) schemes by splitting the time series data into blocks and assigning labels. The blocks for each CV scheme are slightly shifted based on a randomly generated start time for the first block. 
 
-For each CV scheme, we use each block once as the testing set while the remaining blocks serve as the training set. Using the training block, we run a regression for each candidate area where the response variable is the time series of cases for the target area and the explanatory variable is the time series of cases for the candidate area. We then apply the coefficients from the regression from training to the testing block of the candidate area to predict the values for the testing block of the target area. We then assess the performance. In this example, we use squared Pearson correlation (corr²) to quantify how well the predicted cases match the observed cases in the target area.  We choose the best-performing candidate. 
+For each CV scheme, we use each block once as the testing set while the remaining blocks serve as the training set. Using the training block, we run a regression for each candidate area where the response variable is the time series of cases for the target area and the explanatory variable is the time series of cases for the candidate area. We then apply the coefficients from the regression from training to the testing block of the candidate area to predict the values for the testing block of the target area. We then assess the out-of-sample performance. In this example, we use squared Pearson correlation (corr²) to quantify how well the predicted cases match the observed cases in the target area.  We identify the best-performing candidate and retain it as our first selection. 
 
 We then select the next candidate using a greedy selection process. In this process, we find the next candidate that provides the best performance when combined with the previously-selected best-performing area, adding the one that maximizes out-of-sample performance. The process repeats, each time adding the new best candidate area to the model, until the specified number of areas is chosen. Once added, previously selected candidates are fixed and not re-evaluated in subsequent steps.
 
 We repeat this entire process for each of the CV schemes generated over many iterations. Different CV schemes can produce different selected candidates because the start and end points of each block is shifted by a random amount. Each iteration produces a different set of CV schemes. We then choose the top performing candidates over multiple CV schemes and iterations. 
 
-This approach has several advantages compared to other common approaches such as Principal Component Analysis (PCA), clustering (ex. k-means clustering) and elastic net. These methods do not generate out-of-sample predictions for the target area's case time series. PCA identifies shared temporal patterns that explain the most variance across potential control areas. Clustering groups areas with similar epidemic patterns based on a distance or similarity measure. Elastic net uses in-sample predictions to evaluate weighted combinations of potential control areas, but does not assess out-of-sample predictive performance. Overall, this approach provides a more robust and interpretable way to identify representative control areas by directly optimizing out-of-sample predictive performance over time.
+This approach has several advantages compared to other common approaches such as Principal Component Analysis (PCA), clustering (ex. k-means clustering) and elastic net. These methods do not generate out-of-sample predictions for the target area's case time series. PCA identifies shared temporal patterns that explain the most variance across potential control areas. Clustering groups areas with similar epidemic patterns based on a distance or similarity measure. Elastic net uses in-sample predictions to evaluate weighted combinations of potential control areas, but does not assess out-of-sample predictive performance. Overall, this approach provides a more robust and interpretable way to identify representative control areas by directly optimizing out-of-sample predictive performance.
 
 ## Getting Started/Installation
 You will need to install the package from GitHub using the `devtools` package. Make sure you have the appropriate versions of`tidyverse` (>= 2.0.0), `Rcpp` (>= 1.0.13) installed as these are required dependencies.  
@@ -76,8 +76,8 @@ library(sf)                #load sf package for mapping
 ## Data Input
 To use the selection functions in this package, the following are the necessary input data:
 
-* **Target time series**:  A numeric vector of length *t*, representing case counts for the target location at uniform time intervals (e.g. weekly)
-* **Candidate matrix**: A numeric matrix with *t* rows and *c* columns, where each column corresponds to the time series of cases for a candidate location (excluding the target). The rows must be aligned in time with the target time series. 
+* **Target time series**:  A numeric vector of length *t*, representing case counts for the target area at uniform time intervals (e.g. weekly)
+* **Candidate matrix**: A numeric matrix with *t* rows and *c* columns, where each column corresponds to the time series of cases for a candidate area (excluding the target). The rows must be aligned in time with the target time series. 
 
 Examples from this package use data from OpenDengue (Source: @opendengue2025). We use weekly data on dengue cases from Colombia reported between 2000 to 2022. The data is stratified by administrative level 2 or the province.  We load the data below.
 
@@ -90,14 +90,14 @@ head(colombia_dengue)
 For this example, we will use Cali province as the target area and the remaining provinces in Colombia as candidate areas. Therefore, the question we are trying to address is: which of the remaining 1070 provinces, when weighted in linear combination, can best replicate the historical epidemic trajectory of dengue experienced by Cali province?
 
 ### Create the target time series
-The target time series (`goal_vec`) is a numeric vector containing weekly dengue case counts for the selected target area (Cali province). It is the epidemic pattern we want to replicate using other provinces.The candidate matrix must align in time with the target time series, with each row representing the same time period as the corresponding element of the target vector.
+The target time series (`goal_vec`) is a numeric vector containing weekly dengue case counts for the selected target area (Cali province). It is the epidemic pattern we want to replicate using other provinces. The candidate matrix must align in time with the target time series, with each row representing the same time period as the corresponding element of the target vector.
 
 
 ```{r}
 #Create target time series
 goal_name <- "CALI_VAC" ##Make sure the goal name matches exactly how it appears in the dataset (Ex. all caps for "CALI_VAC")
 
-#goal_vec is the weekly dengue case countrs for the target area (Cali province)
+#goal_vec is the weekly dengue case counts for the target area (Cali province)
 #In this example, we are using pre-2019 dengue case data to select for controls and we will use post-2019 case data as a form of out-of-sample validation
 colombia_dengue_pre2019 <- colombia_dengue[colombia_dengue$year<2019,]
 goal_vec <- colombia_dengue_pre2019[colombia_dengue_pre2019$adm_2_name==goal_name, "dengue_total"]
@@ -316,7 +316,7 @@ res_pred$corr2
 
 The overall `corr²` is **`r res_pred$corr2`**.
 
-#### Visualize the observed target and predicted control
+#### Visualize the observed target and predicted control (in-sample)
 ```{r echo=TRUE, fig.width=8, fig.height=5, dpi=300, fig.retina=2, out.width='100%', message=FALSE, warning=FALSE}
 
 data.frame(Week = 1:length(goal_vec),
@@ -416,7 +416,7 @@ X <- colombia_dengue%>%
                   as.matrix()
 ```
 
-Next we split up the data between pre and post hypothetical intervention. We fit the linear model to the pre-intervention period to obtain the weights for control areas. we prepare the dataset to run the controlled interrupted time series analysis (CITS).
+Next we split up the data between pre- and post- intervention. We fit the linear model to the pre-intervention period to obtain the weights for control areas. we prepare the dataset to run the controlled interrupted time series analysis (CITS).
 ```{r}
 date_int <- as.Date("2020-01-01")    #date of hypothetical intervention
 last_before <- max(colombia_dengue$calendar_start_date[colombia_dengue$calendar_start_date < date_int])  
@@ -450,7 +450,7 @@ int_df <- data.frame(Yt = y,
 dat<- bind_rows(control_df,int_df)
 ```
 
-##### Visualize the the pre and post-intervention data for the target Cali and weighted control
+##### Visualize the the pre- and post-intervention data for the target Cali and weighted control
 ```{r fig.width=8, fig.height=5, dpi=300, fig.retina=2, out.width='100%'}
 
 ggplot(dat, aes(x = T, y = Yt, color = as.factor(G))) +
@@ -533,11 +533,11 @@ cf <- summary(fit)$tTable
 cf
 ```
 
-$β_6$ is 71.73 (SE: 907, p-value = 0.94) which can be interpreted as the difference between the change in level in the weighted control (counterfactual) and the target during the "intervention" period. $β_7$ is -0.07 (SE = 0.84, p-value - 0.933) which can be interpretted as the difference between the change in slope in the weighted control and the target during the "intervention" period. We presented a scenario of a hypothetical intervention to demonstrate how to implement an analysis using the selected controls. We do not expect there to be a meaningful change in level or change in slope and results are in line with our expectations. 
+$β_6$ is 71.73 (SE: 907, p-value = 0.94) which can be interpreted as the difference between the change in level in the weighted control (counterfactual) and the target during the post-intervention period. $β_7$ is -0.07 (SE = 0.84, p-value - 0.933) which can be interpretted as the difference between the change in slope in the weighted control and the target during the post-intervention period. We presented a scenario of a hypothetical intervention to demonstrate how to implement an analysis using the selected controls. We do not expect there to be a meaningful change in level or change in slope. These results are in line with our expectations. 
 
 ## Selecting values for parameters
-* We recommend using a minimum of three blocks. With fewer than three blocks, the cross-validation becomes a single train-test split which limits the model's ability to generalize across multiple, potentially distcint temporal phases in the data. 
-* We also recommend at least 1 year of observations for each block so that each block contains sufficient temporal variation. This is especially important for infections like dengue with seasonal epidemic patterns.Larger blocks each with more years of data may be beneficial if there is more heterogeneity between years in the time series. 
+* We recommend using a minimum of three blocks. With fewer than three blocks, the cross-validation becomes a single train-test split which limits the model's ability to generalize across multiple, potentially distinct temporal phases in the data. 
+* We also recommend at least 1 year of observations for each block so that each block contains sufficient temporal variation. This is especially important for infections like dengue with seasonal epidemic patterns. Larger blocks each with more years of data may be beneficial if there is more heterogeneity between years in the time series. 
 
 ## Common pitfalls
 
